@@ -10,6 +10,7 @@ install:
  - export GOPATH=$HOME
  - export PATH=$PATH:$HOME/go/bin
  - ln -s $HOME/builds/peterbourgon/diskv $HOME/src/diskv
+ - go get -v github.com/petar/GoLLRB/llrb
 
 script:
  - cd $HOME/src/diskv && go build .
