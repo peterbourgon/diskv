@@ -1,10 +1,28 @@
-# What is it?
+# What is diskv?
 
 Diskv (disk-vee) is a simple key-value store written in the Go language. It
 starts with an incredibly simple API for storing arbitrary data on a filesystem
 by key, and builds several layers of performance-enhancing abstraction on top.
 The end result is a conceptually simple, but highly performant, disk-backed
 storage system.
+
+[![Build Status][1]][2]
+
+[1]: https://secure.travis-ci.org/peterbourgon/diskv.png
+[2]: http://www.travis-ci.org/peterbourgon/diskv
+
+# Installing
+
+Install [Go][1], either [from source][2] or [with a prepackaged binary][3]. Be
+sure to get at least weekly-2012-03-13 ("Go 1 RC1") or later. Then, run
+
+```
+$ go get -v github.com/peterbourgon/diskv
+```
+
+[1]: http://weekly.golang.org
+[2]: http://weekly.golang.org/doc/install/source
+[3]: http://weekly.golang.org/doc/install
 
 # Basic idea
 
@@ -22,10 +40,10 @@ func SimpleTransform (key KeyType) []string {
 ```
 
 will place all keys in the same, base directory. The design is inspired by
-[Redis diskstore][1]; implementing a TransformFunc to emulate the default
+[Redis diskstore][4]; implementing a TransformFunc to emulate the default
 diskstore behavior is left as an exercise for the reader.
 
-[1]: http://groups.google.com/group/redis-db/browse_thread/thread/d444bc786689bde9?pli=1
+[4]: http://groups.google.com/group/redis-db/browse_thread/thread/d444bc786689bde9?pli=1
 
 Probably the most important design principle behind diskv is that your data is
 always flatly available on the disk. diskv will never do anything that would
@@ -44,12 +62,12 @@ synchronizes only the cache, not the underlying Basic Store.
 
 diskv is a key-value store and therefore inherently unordered. An ordering
 system can be grafted on by combining the Store functionality with [Petar
-Maymounkov's Left-leaning Red-black tree implementation][2]. Basically, diskv
+Maymounkov's Left-leaning Red-black tree implementation][5]. Basically, diskv
 can keep an in-memory index of the keys, ordered by a user-provided LessThan
 function. The index is naïvely populated at startup from the keys on-disk, and
 kept up-to-date as appropriate.
 
-[2]: https://github.com/petar/GoLLRB 
+[5]: https://github.com/petar/GoLLRB 
 
 # Future plans
  
