@@ -1,0 +1,11 @@
+language: erlang # wither art thou, Go?
+
+install:
+ - hg clone -r weekly https://code.google.com/p/go
+ - cd go/src
+ - ./make.bash
+
+script:
+ - go build .
+ - go test .
+
