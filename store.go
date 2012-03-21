@@ -230,7 +230,7 @@ func (s *DStore) Flush() error {
 	return os.RemoveAll(s.basedir)
 }
 
-func DiskvVisitor(c chan Key) func(path string, info os.FileInfo, err error) error {
+func visitor(c chan Key) func(path string, info os.FileInfo, err error) error {
 	return func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() {
 			c <- Key(info.Name())
@@ -244,7 +244,7 @@ func DiskvVisitor(c chan Key) func(path string, info os.FileInfo, err error) err
 func (s *DStore) Keys() <-chan Key {
 	c := make(chan Key)
 	go func() {
-		filepath.Walk(s.basedir, DiskvVisitor(c))
+		filepath.Walk(s.basedir, visitor(c))
 		close(c)
 	}()
 	return c
