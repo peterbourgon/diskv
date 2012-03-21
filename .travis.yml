@@ -1,11 +1,16 @@
 language: erlang # wither art thou, Go?
 
 install:
- - hg clone -r weekly https://code.google.com/p/go
- - cd go/src
+ - hg clone -r weekly https://code.google.com/p/go $HOME/go
+ - cd $HOME/go/src
  - ./make.bash
+ - mkdir -p $HOME/src || true
+ - mkdir -p $HOME/bin || true
+ - mkdir -p $HOME/pkg || true
+ - export GOPATH=$HOME
+ - ln -s $HOME/builds/peterbourgon/diskv $HOME/src/diskv
 
 script:
- - go build .
- - go test .
+ - cd $HOME/src/diskv && go build .
+ - cd $HOME/src/diskv && go test .
 
