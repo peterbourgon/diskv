@@ -2,8 +2,7 @@ language: erlang # wither art thou, Go?
 
 install:
  - hg clone -r weekly https://code.google.com/p/go $HOME/go
- - cd $HOME/go/src
- - ./make.bash
+ - cd $HOME/go/src && ./make.bash
  - mkdir -p $HOME/src || true
  - mkdir -p $HOME/bin || true
  - mkdir -p $HOME/pkg || true
@@ -13,6 +12,6 @@ install:
  - go get -v github.com/petar/GoLLRB/llrb
 
 script:
- - cd $HOME/src/diskv && go build .
- - cd $HOME/src/diskv && go test .
+ - cd $HOME/src/diskv && go build -v .
+ - cd $HOME/src/diskv && go test -v .
 
