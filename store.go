@@ -1,5 +1,7 @@
 package diskv
 
+/*
+
 import (
 	"errors"
 	"fmt"
@@ -297,3 +299,5 @@ func (s *DStore) KeysFrom(k Key, count int) ([]Key, error) {
 	keys = keys[:total]
 	return keys, nil
 }
+
+*/

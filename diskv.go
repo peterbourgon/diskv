@@ -1,5 +1,6 @@
 package diskv
 
+/*
 type Key string
 type Value []byte
 
@@ -11,3 +12,4 @@ type Store interface {
 }
 
 type TransformFunc func(k Key) []string
+*/
