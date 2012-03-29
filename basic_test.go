@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-func dumb_xf(k string) []string {
+func dumbXf(k string) []string {
 	return []string{}
 }
 
 func TestWriteReadErase(t *testing.T) {
-	s := NewStore("test-data", dumb_xf, 1024)
+	s := NewStore("test-data", dumbXf, 1024)
 	defer s.Flush()
 	k, v := "a", []byte{'b'}
 	if err := s.Write(k, v); err != nil {
@@ -28,7 +28,7 @@ func TestWriteReadErase(t *testing.T) {
 }
 
 func TestWRECache(t *testing.T) {
-	s := NewStore("test-data", dumb_xf, 1024)
+	s := NewStore("test-data", dumbXf, 1024)
 	defer s.Flush()
 	k, v := "xxx", []byte{' ', ' ', ' '}
 	if s.IsCached(k) {
@@ -60,7 +60,7 @@ func TestWRECache(t *testing.T) {
 }
 
 func Teststrings(t *testing.T) {
-	s := NewStore("test-data", dumb_xf, 1024)
+	s := NewStore("test-data", dumbXf, 1024)
 	defer s.Flush()
 	keys := map[string]bool{"a": false, "b": false, "c": false, "d": false}
 	v := []byte{'1'}
@@ -86,7 +86,7 @@ func Teststrings(t *testing.T) {
 }
 
 func TestZeroByteCache(t *testing.T) {
-	s := NewStore("test-data", dumb_xf, 0)
+	s := NewStore("test-data", dumbXf, 0)
 	defer s.Flush()
 	k, v := "a", []byte{'1', '2', '3'}
 	if err := s.Write(k, v); err != nil {
@@ -104,7 +104,7 @@ func TestZeroByteCache(t *testing.T) {
 }
 
 func TestOneByteCache(t *testing.T) {
-	s := NewStore("test-data", dumb_xf, 1)
+	s := NewStore("test-data", dumbXf, 1)
 	defer s.Flush()
 	k1, k2, v1, v2 := "a", "b", []byte{'1'}, []byte{'1', '2'}
 	if err := s.Write(k1, v1); err != nil {

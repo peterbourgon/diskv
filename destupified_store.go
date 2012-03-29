@@ -63,6 +63,33 @@ func (s *Store) Keys() <-chan string {
 	return c
 }
 
+func (s *Store) KeysFrom(k string, count int) ([]string, error) {
+	if s.index.Len() <= 0 {
+		return []string{}, nil
+	}
+	skipFirst := true
+	if len(k) <= 0 || !s.index.Has(k) {
+		k = s.index.Min().(string) // no such key, so start at the top
+		skipFirst = false
+	}
+	keys := make([]string, count)
+	c := s.index.IterRange(k, s.index.Max())
+	total := 0
+	if skipFirst {
+		<-c
+	}
+	for i, k := 0, <-c; i < count && k != nil; i, k = i+1, <-c {
+		keys[i] = k.(string)
+		total++
+	}
+	if total < count { // hack to get around IterRange returning only E < @upper
+		keys[total] = s.index.Max().(string)
+		total++
+	}
+	keys = keys[:total]
+	return keys, nil
+}
+
 func (s *Store) ResetOrder(lf llrb.LessFunc) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -72,15 +99,16 @@ func (s *Store) ResetOrder(lf llrb.LessFunc) {
 
 func (s *Store) rebuildIndex() {
 	keyChan := s.Keys()
-	begin := time.Now()
+	count, begin := 0, time.Now()
 	for {
 		key, ok := <-keyChan
 		if !ok {
 			break // closed
 		}
 		s.index.ReplaceOrInsert(key)
+		count = count + 1
 	}
-	log.Printf("index rebuilt in %s", time.Now().Sub(begin))
+	log.Printf("index rebuilt (%d keys) in %s", count, time.Now().Sub(begin))
 }
 
 func (s *Store) Flush() error {
@@ -163,6 +191,12 @@ func (s *Store) IsCached(k string) bool {
 	defer s.mutex.RUnlock()
 	_, present := s.cache[k]
 	return present
+}
+
+func (s *Store) IsIndexed(k string) bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.index.Has(k)
 }
 
 func (s *Store) ensureDir(k string) error {
