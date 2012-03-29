@@ -1,19 +1,19 @@
 package diskv
 
 import (
-	"testing"
 	"bytes"
+	"testing"
 	"time"
 )
 
-func dumb_xf(k Key) []string {
+func dumb_xf(k string) []string {
 	return []string{}
 }
 
 func TestWriteReadErase(t *testing.T) {
-	s := NewDStore(".", dumb_xf, 1024)
+	s := NewStore("test-data", dumb_xf, 1024)
 	defer s.Flush()
-	k, v := Key("a"), Value([]byte{'b'})
+	k, v := "a", []byte{'b'}
 	if err := s.Write(k, v); err != nil {
 		t.Fatalf("write: %s", err)
 	}
@@ -28,9 +28,9 @@ func TestWriteReadErase(t *testing.T) {
 }
 
 func TestWRECache(t *testing.T) {
-	s := NewDStore(".", dumb_xf, 1024)
+	s := NewStore("test-data", dumb_xf, 1024)
 	defer s.Flush()
-	k, v := Key("xxx"), Value([]byte{' ', ' ', ' '})
+	k, v := "xxx", []byte{' ', ' ', ' '}
 	if s.IsCached(k) {
 		t.Fatalf("key cached before Write and Read")
 	}
@@ -59,11 +59,11 @@ func TestWRECache(t *testing.T) {
 	}
 }
 
-func TestKeys(t *testing.T) {
-	s := NewDStore(".", dumb_xf, 1024)
+func Teststrings(t *testing.T) {
+	s := NewStore("test-data", dumb_xf, 1024)
 	defer s.Flush()
-	keys := map[Key]bool{"a": false, "b": false, "c": false, "d": false}
-	v := Value([]byte{'1'})
+	keys := map[string]bool{"a": false, "b": false, "c": false, "d": false}
+	v := []byte{'1'}
 	for k, _ := range keys {
 		if err := s.Write(k, v); err != nil {
 			t.Fatalf("write: %s: %s", k, err)
@@ -75,7 +75,7 @@ func TestKeys(t *testing.T) {
 			keys[k] = true
 			t.Logf("got: %s\n", k)
 		} else {
-			t.Fatalf("Keys() returns unknown key: %s", k)
+			t.Fatalf("strings() returns unknown key: %s", k)
 		}
 	}
 	for k, found := range keys {
@@ -86,9 +86,9 @@ func TestKeys(t *testing.T) {
 }
 
 func TestZeroByteCache(t *testing.T) {
-	s := NewDStore(".", dumb_xf, 0)
+	s := NewStore("test-data", dumb_xf, 0)
 	defer s.Flush()
-	k, v := Key("a"), Value([]byte{'1', '2', '3'})
+	k, v := "a", []byte{'1', '2', '3'}
 	if err := s.Write(k, v); err != nil {
 		t.Fatalf("Write: %s", err)
 	}
@@ -104,9 +104,9 @@ func TestZeroByteCache(t *testing.T) {
 }
 
 func TestOneByteCache(t *testing.T) {
-	s := NewDStore(".", dumb_xf, 1)
+	s := NewStore("test-data", dumb_xf, 1)
 	defer s.Flush()
-	k1, k2, v1, v2 := Key("a"), Key("b"), Value([]byte{'1'}), Value([]byte{'1', '2'})
+	k1, k2, v1, v2 := "a", "b", []byte{'1'}, []byte{'1', '2'}
 	if err := s.Write(k1, v1); err != nil {
 		t.Fatalf("%s", err)
 	}
