@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+var (
+	defaultFilePerm os.FileMode = 0777
+	defaultDirPerm  os.FileMode = 0777
+)
+
 func walker(c chan string) func(path string, info os.FileInfo, err error) error {
 	return func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() {
@@ -97,7 +102,7 @@ func (s *Store) Write(k string, v []byte) error {
 		return err
 	}
 	mode := os.O_WRONLY | os.O_CREATE // overwrite if exists
-	f, err := os.OpenFile(s.filename(k), mode, 0600)
+	f, err := os.OpenFile(s.filename(k), mode, defaultFilePerm)
 	if err != nil {
 		return err
 	}
@@ -161,7 +166,7 @@ func (s *Store) IsCached(k string) bool {
 }
 
 func (s *Store) ensureDir(k string) error {
-	return os.MkdirAll(s.dir(k), 0600)
+	return os.MkdirAll(s.dir(k), defaultDirPerm)
 }
 
 func (s *Store) dir(k string) string {

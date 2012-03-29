@@ -46,7 +46,7 @@ func TestWRECache(t *testing.T) {
 		t.Fatalf("read: expected %s, got %s", v, read_v)
 	}
 	for i := 0; i < 10 && !s.IsCached(k); i++ {
-		time.Sleep(10e6) // 10ms
+		time.Sleep(10 * time.Millisecond)
 	}
 	if !s.IsCached(k) {
 		t.Fatalf("key not cached after Read")
@@ -114,7 +114,7 @@ func TestOneByteCache(t *testing.T) {
 		t.Fatalf("%s", err)
 	}
 	for i := 0; i < 10 && !s.IsCached(k1); i++ {
-		time.Sleep(10e6) // 10ms
+		time.Sleep(10 * time.Millisecond)
 	}
 	if !s.IsCached(k1) {
 		t.Fatalf("expected 1-byte value to be cached, but it wasn't")
@@ -125,11 +125,11 @@ func TestOneByteCache(t *testing.T) {
 	if _, err := s.Read(k2); err != nil {
 		t.Fatalf("%s", err)
 	}
-	for i := 0; i < 10 && (s.IsCached(k1) || s.IsCached(k2)); i++ {
-		time.Sleep(10e6) // just wait for lazy cache + make_room_for to complete
+	for i := 0; i < 10 && (!s.IsCached(k1) || s.IsCached(k2)); i++ {
+		time.Sleep(10 * time.Millisecond) // just wait for lazy-cache
 	}
-	if s.IsCached(k1) {
-		t.Fatalf("1-byte value remained cached after read of 2-byte value")
+	if !s.IsCached(k1) {
+		t.Fatalf("1-byte value was uncached for no reason")
 	}
 	if s.IsCached(k2) {
 		t.Fatalf("2-byte value was cached, but cache max size is 1")
