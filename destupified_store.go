@@ -108,7 +108,9 @@ func (s *Store) rebuildIndex() {
 		s.index.ReplaceOrInsert(key)
 		count = count + 1
 	}
-	log.Printf("index rebuilt (%d keys) in %s", count, time.Now().Sub(begin))
+	if count > 0 {
+		log.Printf("index rebuilt (%d keys) in %s", count, time.Now().Sub(begin))
+	}
 }
 
 func (s *Store) Flush() error {
