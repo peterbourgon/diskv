@@ -55,9 +55,18 @@ func benchRead(b *testing.B, size, cachesz int) {
 	b.StopTimer()
 }
 
-func benchWrite(b *testing.B, size int) {
+func benchWrite(b *testing.B, size int, withIndex bool) {
 	b.StopTimer()
-	s := NewStore("speed-test", dumbXf, 0)
+	type Writeable interface {
+		Write(k string, v []byte) error
+		Flush() error
+	}
+	var s Writeable = nil
+	if withIndex {
+		s = NewOrderedStore("speed-test", dumbXf, 0)
+	} else {
+		s = NewStore("speed-test", dumbXf, 0)
+	}
 	defer s.Flush()
 	keys := genKeys()
 	value := genValue(size)
@@ -70,38 +79,66 @@ func benchWrite(b *testing.B, size int) {
 	b.StopTimer()
 }
 
-func BenchmarkWrite_1K(b *testing.B) {
-	benchWrite(b, 1024)
+func BenchmarkWrite_32B_NoIndex(b *testing.B) {
+	benchWrite(b, 32, false)
 }
 
-func BenchmarkWrite_4K(b *testing.B) {
-	benchWrite(b, 4096)
+func BenchmarkWrite_1KB_NoIndex(b *testing.B) {
+	benchWrite(b, 1024, false)
 }
 
-func BenchmarkWrite_10K(b *testing.B) {
-	benchWrite(b, 10240)
+func BenchmarkWrite_4KB_NoIndex(b *testing.B) {
+	benchWrite(b, 4096, false)
 }
 
-func BenchmarkRead_1K_NoCache(b *testing.B) {
+func BenchmarkWrite_10KB_NoIndex(b *testing.B) {
+	benchWrite(b, 10240, false)
+}
+
+func BenchmarkWrite_32B_WithIndex(b *testing.B) {
+	benchWrite(b, 32, true)
+}
+
+func BenchmarkWrite_1KB_WithIndex(b *testing.B) {
+	benchWrite(b, 1024, true)
+}
+
+func BenchmarkWrite_4KB_WithIndex(b *testing.B) {
+	benchWrite(b, 4096, true)
+}
+
+func BenchmarkWrite_10KB_WithIndex(b *testing.B) {
+	benchWrite(b, 10240, true)
+}
+
+func BenchmarkRead_32B_NoCache(b *testing.B) {
+	benchRead(b, 32, 0)
+}
+
+func BenchmarkRead_1KB_NoCache(b *testing.B) {
 	benchRead(b, 1024, 0)
 }
 
-func BenchmarkRead_1K_WithCache(b *testing.B) {
-	benchRead(b, 1024, KEY_COUNT*1024*2)
-}
-
-func BenchmarkRead_4K_NoCache(b *testing.B) {
+func BenchmarkRead_4KB_NoCache(b *testing.B) {
 	benchRead(b, 4096, 0)
 }
 
-func BenchmarkRead_4K_WithCache(b *testing.B) {
-	benchRead(b, 4096, KEY_COUNT*4096*2)
-}
-
-func BenchmarkRead_10K_NoCache(b *testing.B) {
+func BenchmarkRead_10KB_NoCache(b *testing.B) {
 	benchRead(b, 10240, 0)
 }
 
-func BenchmarkRead_10K_WithCache(b *testing.B) {
+func BenchmarkRead_32B_WithCache(b *testing.B) {
+	benchRead(b, 32, KEY_COUNT*32*2)
+}
+
+func BenchmarkRead_1KB_WithCache(b *testing.B) {
+	benchRead(b, 1024, KEY_COUNT*1024*2)
+}
+
+func BenchmarkRead_4KB_WithCache(b *testing.B) {
+	benchRead(b, 4096, KEY_COUNT*4096*2)
+}
+
+func BenchmarkRead_10KB_WithCache(b *testing.B) {
 	benchRead(b, 10240, KEY_COUNT*4096*2)
 }
