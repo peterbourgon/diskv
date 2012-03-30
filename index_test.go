@@ -27,7 +27,7 @@ func cmp(a, b []string) bool {
 }
 
 func TestIndexOrder(t *testing.T) {
-	s := NewStore("index-test", simpleXf, 1024)
+	s := NewOrderedStore("index-test", simpleXf, 1024)
 	s.ResetOrder(strLess)
 	defer s.Flush()
 	v := []byte{'1', '2', '3'}
@@ -47,7 +47,7 @@ func TestIndexOrder(t *testing.T) {
 }
 
 func TestIndexLoad(t *testing.T) {
-	s := NewStore("index-test", simpleXf, 1024)
+	s := NewOrderedStore("index-test", simpleXf, 1024)
 	s.ResetOrder(strLess)
 	defer s.Flush()
 	v := []byte{'1', '2', '3'}
@@ -55,7 +55,7 @@ func TestIndexLoad(t *testing.T) {
 	for _, k := range keys {
 		_ = s.Write(k, v)
 	}
-	s2 := NewStore("index-test", simpleXf, 1024)
+	s2 := NewOrderedStore("index-test", simpleXf, 1024)
 	s2.ResetOrder(strLess)
 	for _, k := range keys {
 		if !s2.IsIndexed(k) {
