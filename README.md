@@ -55,8 +55,7 @@ your data via common UNIX commandline tools.
 An in-memory caching layer is provided by combining the BasicStore
 functionality with a simple map structure, and keeping it up-to-date as
 appropriate. Since the map structure in Go is not threadsafe, it's combined
-with a RWMutex  to provide safe concurrent access. Note that the mutex
-synchronizes only the cache, not the underlying Basic Store.
+with a RWMutex  to provide safe concurrent access. 
 
 # Adding order
 
