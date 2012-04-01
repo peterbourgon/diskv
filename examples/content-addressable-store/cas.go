@@ -9,11 +9,10 @@ import (
 )
 
 const (
-	transformBlockSize = 4 // grouping of chars per directory depth
+	transformBlockSize = 2 // grouping of chars per directory depth
 )
 
 func BlockTransform(s string) []string {
-	s = collapseSpace(s)
 	sliceSize := len(s) / transformBlockSize
 	pathSlice := make([]string, sliceSize)
 	for i := 0; i < sliceSize; i++ {
@@ -53,22 +52,6 @@ func main() {
 	fmt.Printf("%d total keys\n", keyCount)
 
 	// s.Flush() // leave it commented out to see how data is kept on disk
-}
-
-func collapseSpace(s string) string {
-	s2 := []rune{}
-	for _, c := range s {
-		switch c {
-		case ' ':
-		case '\r':
-		case '\n':
-		case '\t':
-			break
-		default:
-			s2 = append(s2, c)
-		}
-	}
-	return string(s2)
 }
 
 func md5sum(s string) string {
