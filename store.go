@@ -28,6 +28,8 @@ func walker(c chan string) func(path string, info os.FileInfo, err error) error 
 // A TransformFunc transforms a key into a slice of strings, with each
 // element in the slice representing a directory in the file path
 // where the key's entry will eventually be stored.
+// For example, if TransformFunc transforms "abcdef" to ["ab", "cde", "f"],
+// the final location of the data file will be <basedir>/ab/cde/f/abcdef
 type TransformFunc func(string) []string
 
 type Store struct {
