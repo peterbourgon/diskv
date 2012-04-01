@@ -1,10 +1,10 @@
 # What is diskv?
 
-Diskv (disk-vee) is a simple key-value store written in the Go language. It
-starts with an incredibly simple API for storing arbitrary data on a filesystem
-by key, and builds several layers of performance-enhancing abstraction on top.
-The end result is a conceptually simple, but highly performant, disk-backed
-storage system.
+Diskv (disk-vee) is a simple, persistent key-value store written in the Go
+language. It starts with an incredibly simple API for storing arbitrary data on
+a filesystem by key, and builds several layers of performance-enhancing
+abstraction on top.  The end result is a conceptually simple, but highly
+performant, disk-backed storage system.
 
 [![Build Status][1]][2]
 
@@ -23,6 +23,41 @@ $ go get -v github.com/peterbourgon/diskv
 [3]: http://weekly.golang.org
 [4]: http://weekly.golang.org/doc/install/source
 [5]: http://weekly.golang.org/doc/install
+
+# Usage
+
+```
+package main
+
+import (
+	"fmt"
+	"github.com/peterbourgon/diskv"
+)
+
+func main() {
+	flatTransform := func(s string) []string { return []string{""} }
+	s := diskv.NewStore("my-store-dir", flatTransform, 1024*1024)
+
+	key := "alpha"
+	writeErr := s.Write(key, []byte{'1', '2', '3'})
+	if writeErr != nil {
+		panic(fmt.Sprintf("%s", writeErr))
+	}
+
+	value, readErr := s.Read(key)
+	if readErr != nil {
+		panic(fmt.Sprintf("%s", readErr))
+	}
+	fmt.Printf("%v\n", value)
+
+	eraseErr := s.Erase(key)
+	if eraseErr != nil {
+		panic(fmt.Sprintf("%s", eraseErr))
+	}
+}
+```
+
+More complex examples can be found in the "examples" subdirectory.
 
 # Basic idea
 
