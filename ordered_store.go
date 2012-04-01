@@ -14,6 +14,9 @@ type OrderedStore struct {
 	lf         llrb.LessFunc
 }
 
+// NewOrderedStore returns a new, ordered diskv store.
+// It abides the same semantics as NewStore.
+// Existing keys are scanned and ordered at instantiation.
 func NewOrderedStore(baseDir string, xf TransformFunc, cacheSizeMax uint) *OrderedStore {
 	s := &OrderedStore{
 		Store:      *NewStore(baseDir, xf, cacheSizeMax),
@@ -26,6 +29,11 @@ func NewOrderedStore(baseDir string, xf TransformFunc, cacheSizeMax uint) *Order
 	return s
 }
 
+// KeysFrom returns a slice of ordered keys that is maximum count items long.
+// If the passed key is empty, KeysFrom will return the first count keys.
+// If the passed key is non-empty, the first key in the returned slice will
+// be the key that immediately follows the passed key, in key order.
+// KeysFrom is designed to be used to effect a simple "pagination" of keys.
 func (s *OrderedStore) KeysFrom(k string, count int) ([]string, error) {
 	if s.index.Len() <= 0 {
 		return []string{}, nil
@@ -53,6 +61,8 @@ func (s *OrderedStore) KeysFrom(k string, count int) ([]string, error) {
 	return keys, nil
 }
 
+// ResetOrder resets the key comparison function for the order index, 
+// and rebuilds the index according to that function.
 func (s *OrderedStore) ResetOrder(lf llrb.LessFunc) {
 	s.indexMutex.Lock()
 	defer s.indexMutex.Unlock()
@@ -60,10 +70,12 @@ func (s *OrderedStore) ResetOrder(lf llrb.LessFunc) {
 	s.rebuildIndex()
 }
 
+// rebuildIndex does the work of regenerating the index
+// according to the comparison function in the store.
 func (s *OrderedStore) rebuildIndex() {
 	s.index = llrb.New(s.lf)
 	keyChan := s.Keys()
-	count, begin := 0, time.Now()
+	count, began := 0, time.Now()
 	for {
 		key, ok := <-keyChan
 		if !ok {
@@ -73,10 +85,11 @@ func (s *OrderedStore) rebuildIndex() {
 		count = count + 1
 	}
 	if count > 0 {
-		log.Printf("index rebuilt (%d keys) in %s", count, time.Now().Sub(begin))
+		log.Printf("index rebuilt (%d keys) in %s", count, time.Since(began))
 	}
 }
 
+// Flush triggers a store Flush, and does extra work to clear the order index.
 func (s *OrderedStore) Flush() error {
 	err := s.Store.Flush()
 	if err == nil {
@@ -87,6 +100,7 @@ func (s *OrderedStore) Flush() error {
 	return err
 }
 
+// Write triggers a store Write, and does extra work to update the order index.
 func (s *OrderedStore) Write(k string, v []byte) error {
 	err := s.Store.Write(k, v)
 	if err == nil {
@@ -97,6 +111,7 @@ func (s *OrderedStore) Write(k string, v []byte) error {
 	return err
 }
 
+// Erase triggers a store Erase, and does extra work to update the order index.
 func (s *OrderedStore) Erase(k string) error {
 	err := s.Store.Erase(k)
 	if err == nil {
@@ -107,6 +122,7 @@ func (s *OrderedStore) Erase(k string) error {
 	return err
 }
 
+// IsIndex returns true if the given key exists in the order index.
 func (s *OrderedStore) IsIndexed(k string) bool {
 	s.indexMutex.RLock()
 	defer s.indexMutex.RUnlock()

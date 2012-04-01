@@ -14,6 +14,8 @@ var (
 	defaultDirPerm  os.FileMode = 0777
 )
 
+// walker returns a function which satisfies the filepath.WalkFunc interface.
+// It sends every non-directory file entry down the channel c.
 func walker(c chan string) func(path string, info os.FileInfo, err error) error {
 	return func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() {
@@ -23,6 +25,9 @@ func walker(c chan string) func(path string, info os.FileInfo, err error) error 
 	}
 }
 
+// A TransformFunc transforms a key into a slice of strings, with each
+// element in the slice representing a directory in the file path
+// where the key's entry will eventually be stored.
 type TransformFunc func(string) []string
 
 type Store struct {
@@ -34,6 +39,9 @@ type Store struct {
 	mutex        sync.RWMutex
 }
 
+// NewStore returns a new, unordered diskv store.
+// If the path identified by baseDir already contains data,
+// it will be accessible (but not yet cached) by this store.
 func NewStore(baseDir string, xf TransformFunc, cacheSizeMax uint) *Store {
 	s := &Store{
 		baseDir:      baseDir,
@@ -46,6 +54,8 @@ func NewStore(baseDir string, xf TransformFunc, cacheSizeMax uint) *Store {
 	return s
 }
 
+// Keys returns a channel that will yield every key
+// accessible by the store in undefined order.
 func (s *Store) Keys() <-chan string {
 	c := make(chan string)
 	go func() {
@@ -55,6 +65,11 @@ func (s *Store) Keys() <-chan string {
 	return c
 }
 
+// Flush will delete all of the data from the store, both
+// in the cache and on the disk. Note that Flush doesn't
+// distinguish diskv-related data from non-diskv-related data.
+// Care should be taken to always specify a diskv base directory
+// that is exclusively for diskv data.
 func (s *Store) Flush() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -63,6 +78,8 @@ func (s *Store) Flush() error {
 	return os.RemoveAll(s.baseDir)
 }
 
+// Write synchronously writes the key-value pair to disk,
+// making it immediately available for reads.
 func (s *Store) Write(k string, v []byte) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -84,6 +101,10 @@ func (s *Store) Write(k string, v []byte) error {
 	return nil // cache only on read
 }
 
+// Read reads the key and returns the value.
+// If the key is available in the cache, Read won't touch the disk.
+// If the key is not in the cache, Read will have the side-effect of
+// lazily caching the value.
 func (s *Store) Read(k string) ([]byte, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -101,6 +122,7 @@ func (s *Store) Read(k string) ([]byte, error) {
 	return v, nil
 }
 
+// Erase synchronously erases the given key from the disk and the cache.
 func (s *Store) Erase(k string) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -126,6 +148,7 @@ func (s *Store) Erase(k string) error {
 	return nil
 }
 
+// IsCached returns true if the key exists in the cache.
 func (s *Store) IsCached(k string) bool {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -133,47 +156,80 @@ func (s *Store) IsCached(k string) bool {
 	return present
 }
 
+// ensureDir is a helper function that generates all necessary
+// directories on the filesystem for the given key.
 func (s *Store) ensureDir(k string) error {
 	return os.MkdirAll(s.dir(k), defaultDirPerm)
 }
 
+// dir returns the absolute path for location on the filesystem
+// where the data for the given key will be stored.
 func (s *Store) dir(k string) string {
 	pathlist := s.xf(k)
 	return fmt.Sprintf("%s/%s", s.baseDir, strings.Join(pathlist, "/"))
 }
 
-// Returns the full path to the file holding data for the given Key.
+// filename returns the absolute path to the file for the given key.
 func (s *Store) filename(k string) string {
 	return fmt.Sprintf("%s/%s", s.dir(k), k)
 }
 
-func (s *Store) cacheWithLock(k string, v []byte) {
+// cacheWithLock attempts to cache the given key-value pair in the
+// store's cache. It can fail if the value is larger than the cache's
+// maximum size.
+func (s *Store) cacheWithLock(k string, v []byte) error {
 	valueSize := uint(len(v))
-	if valueSize > s.cacheSizeMax {
-		return // cannot comply
+	if err := s.ensureCacheSpaceFor(valueSize); err != nil {
+		return fmt.Errorf("%s; not caching", err)
 	}
-	s.ensureCacheSpaceFor(valueSize)
-	if (s.cacheSize + valueSize) <= s.cacheSizeMax {
-		s.cache[k] = v
-		s.cacheSize += valueSize
+	if (s.cacheSize + valueSize) > s.cacheSizeMax {
+		panic(
+			fmt.Sprintf(
+				"failed to make room for value (%d/%d)",
+				valueSize,
+				s.cacheSizeMax,
+			),
+		)
 	}
+	s.cache[k] = v
+	s.cacheSize += valueSize
+	return nil
 }
 
-func (s *Store) cacheWithoutLock(k string, v []byte) {
+// cacheWithoutLock acquires the store's (write) mutex
+// and calls cacheWithLock.
+func (s *Store) cacheWithoutLock(k string, v []byte) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.cacheWithLock(k, v)
+	return s.cacheWithLock(k, v)
 }
 
-// Deletes entries from the cache until it has at least sz bytes available.
-func (s *Store) ensureCacheSpaceFor(valueSize uint) {
+// ensureCacheSpaceFor deletes entries from the cache in arbitrary order
+// until the cache has at least valueSize bytes available.
+func (s *Store) ensureCacheSpaceFor(valueSize uint) error {
+	if valueSize > s.cacheSizeMax {
+		return fmt.Errorf(
+			"value size (%d bytes) too large for cache (%d bytes)",
+			valueSize,
+			s.cacheSizeMax,
+		)
+	}
+	safe := func() bool { return (s.cacheSize + valueSize) <= s.cacheSizeMax }
 	for k, v := range s.cache {
-		if (s.cacheSize + valueSize) <= s.cacheSizeMax {
+		if safe() {
 			break
 		}
 		delete(s.cache, k)          // delete is safe, per spec
 		s.cacheSize -= uint(len(v)) // len should return uint :|
 	}
+	if !safe() {
+		panic(fmt.Sprintf(
+			"%d bytes still won't fit in the cache! (max %d bytes)",
+			valueSize,
+			s.cacheSizeMax,
+		))
+	}
+	return nil
 }
 
 // pruneDirs deletes empty directories in the path walk leading to the key k.
