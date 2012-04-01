@@ -35,12 +35,10 @@ import (
 )
 
 func main() {
-	// flatTransform is the simplest possible Transform function,
-	// and will put all of the data files into the root directory.
+	// Simple transform function to put all of the data files into the root directory.
 	flatTransform := func(s string) []string { return []string{""} }
 
-	// Initialize a new diskv store, rooted at "my-store-dir".
-	// Use flatTransform to place data, and keep a 1MB cache.
+	// Initialize a new diskv store, rooted at "my-store-dir", with a 1MB cache.
 	s := diskv.NewStore("my-store-dir", flatTransform, 1024*1024)
 	
 	// Write three bytes to the key "alpha".
