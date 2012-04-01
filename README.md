@@ -69,7 +69,7 @@ corresponding to a path list where the key file will be stored. The simplest
 TransformFunc,
 
 ```
-func SimpleTransform (key KeyType) []string {
+func SimpleTransform (key string) []string {
     return []string{""}
 }
 ```
