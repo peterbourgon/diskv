@@ -72,8 +72,8 @@ func SimpleTransform (key string) []string {
 ```
 
 will place all keys in the same, base directory. The design is inspired by
-[Redis diskstore][6]; implementing a TransformFunc to emulate the default
-diskstore behavior is left as an exercise for the reader.
+[Redis diskstore][6]; a TransformFunc which emulates the default diskstore
+behavior is available in the content-addressable-storage example.
 
 [6]: http://groups.google.com/group/redis-db/browse_thread/thread/d444bc786689bde9?pli=1
 
