@@ -1,7 +1,7 @@
 language: erlang # wither art thou, Go?
 
 install:
- - hg clone -r weekly https://code.google.com/p/go $HOME/go
+ - hg clone -r go1 https://code.google.com/p/go $HOME/go
  - cd $HOME/go/src && ./make.bash
  - mkdir -p $HOME/src || true
  - mkdir -p $HOME/bin || true
