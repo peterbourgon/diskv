@@ -91,7 +91,7 @@ func (s *Store) Write(k string, v []byte) error {
 	if err := s.ensureDir(k); err != nil {
 		return err
 	}
-	mode := os.O_WRONLY | os.O_CREATE // overwrite if exists
+	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists
 	f, err := os.OpenFile(s.filename(k), mode, defaultFilePerm)
 	if err != nil {
 		return err
@@ -100,6 +100,7 @@ func (s *Store) Write(k string, v []byte) error {
 	if _, err = f.Write(v); err != nil {
 		return err
 	}
+	delete(s.cache, k)
 	return nil // cache only on read
 }
 

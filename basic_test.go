@@ -59,7 +59,7 @@ func TestWRECache(t *testing.T) {
 	}
 }
 
-func Teststrings(t *testing.T) {
+func TestStrings(t *testing.T) {
 	s := NewStore("test-data", dumbXf, 1024)
 	defer s.Flush()
 	keys := map[string]bool{"a": false, "b": false, "c": false, "d": false}
@@ -108,10 +108,10 @@ func TestOneByteCache(t *testing.T) {
 	defer s.Flush()
 	k1, k2, v1, v2 := "a", "b", []byte{'1'}, []byte{'1', '2'}
 	if err := s.Write(k1, v1); err != nil {
-		t.Fatalf("%s", err)
+		t.Fatal(err)
 	}
 	if _, err := s.Read(k1); err != nil {
-		t.Fatalf("%s", err)
+		t.Fatal(err)
 	}
 	for i := 0; i < 10 && !s.IsCached(k1); i++ {
 		time.Sleep(10 * time.Millisecond)
@@ -120,10 +120,10 @@ func TestOneByteCache(t *testing.T) {
 		t.Fatalf("expected 1-byte value to be cached, but it wasn't")
 	}
 	if err := s.Write(k2, v2); err != nil {
-		t.Fatalf("%s", err)
+		t.Fatal(err)
 	}
 	if _, err := s.Read(k2); err != nil {
-		t.Fatalf("%s", err)
+		t.Fatal(err)
 	}
 	for i := 0; i < 10 && (!s.IsCached(k1) || s.IsCached(k2)); i++ {
 		time.Sleep(10 * time.Millisecond) // just wait for lazy-cache
@@ -133,5 +133,31 @@ func TestOneByteCache(t *testing.T) {
 	}
 	if s.IsCached(k2) {
 		t.Fatalf("2-byte value was cached, but cache max size is 1")
+	}
+}
+
+func TestStaleCache(t *testing.T) {
+	s := NewStore("test-data", dumbXf, 1)
+	defer s.Flush()
+	k, first, second := "a", "first", "second"
+	if err := s.Write(k, []byte(first)); err != nil {
+		t.Fatal(err)
+	}
+	v, err := s.Read(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(v) != first {
+		t.Errorf("expected '%s', got '%s'", first, v)
+	}
+	if err := s.Write(k, []byte(second)); err != nil {
+		t.Fatal(err)
+	}
+	v, err = s.Read(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(v) != second {
+		t.Errorf("expected '%s', got '%s'", second, v)
 	}
 }
