@@ -1,8 +1,8 @@
 package diskv
 
-/*
 import (
 	"bytes"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -11,9 +11,7 @@ func simpleXf(k string) []string {
 	return []string{string(k)}
 }
 
-func strLess(a, b interface{}) bool {
-	return a.(string) < b.(string)
-}
+func strLess(a, b string) bool { return a < b }
 
 func cmp(a, b []string) bool {
 	if len(a) != len(b) {
@@ -27,65 +25,109 @@ func cmp(a, b []string) bool {
 	return true
 }
 
+func (d *Diskv) isIndexed(key string) bool {
+	if d.Index == nil {
+		return false
+	}
+
+	for got := range d.Index.Keys("", 1000) {
+		if got == key {
+			return true
+		}
+	}
+	return false
+}
+
 func TestIndexOrder(t *testing.T) {
-	s := NewOrderedStore("index-test", simpleXf, 1024)
-	s.ResetOrder(strLess)
-	defer s.Flush()
+	d := New(Options{
+		BasePath:     "index-test",
+		Transform:    simpleXf,
+		CacheSizeMax: 1024,
+		Index:        &LLRBIndex{},
+		IndexLess:    strLess,
+	})
+	defer d.Flush()
+
 	v := []byte{'1', '2', '3'}
-	_ = s.Write("a", v)
-	_ = s.Write("1", v)
-	_ = s.Write("m", v)
-	_ = s.Write("-", v)
-	_ = s.Write("A", v)
+	d.Write("a", v)
+	if !d.isIndexed("a") {
+		t.Fatalf("'a' not indexed after write")
+	}
+	d.Write("1", v)
+	d.Write("m", v)
+	d.Write("-", v)
+	d.Write("A", v)
+
 	expectedKeys := []string{"-", "1", "A", "a", "m"}
-	if keys, err := s.KeysFrom("", 100); err != nil {
-		t.Fatalf("%s", err)
-	} else if len(keys) != 5 {
-		t.Fatalf("KeysFrom: got %d, expected %d", len(keys), 5)
-	} else if !cmp(keys, expectedKeys) {
-		t.Fatalf("KeysFrom: got %s, expected %s", keys, expectedKeys)
+	keys := []string{}
+	for key := range d.Index.Keys("", 100) {
+		keys = append(keys, key)
+	}
+	fmt.Printf("got %d keys\n", len(keys))
+
+	if !cmp(keys, expectedKeys) {
+		t.Fatalf("got %s, expected %s", keys, expectedKeys)
 	}
 }
 
 func TestIndexLoad(t *testing.T) {
-	s := NewOrderedStore("index-test", simpleXf, 1024)
-	s.ResetOrder(strLess)
-	defer s.Flush()
-	v := []byte{'1', '2', '3'}
+	d1 := New(Options{
+		BasePath:     "index-test",
+		Transform:    simpleXf,
+		CacheSizeMax: 1024,
+	})
+	defer d1.Flush()
+
+	val := []byte{'1', '2', '3'}
 	keys := []string{"a", "b", "c", "d", "e", "f", "g"}
-	for _, k := range keys {
-		_ = s.Write(k, v)
+	for _, key := range keys {
+		d1.Write(key, val)
+		t.Logf("d1: write '%s'", key)
 	}
-	s2 := NewOrderedStore("index-test", simpleXf, 1024)
-	s2.ResetOrder(strLess)
-	for _, k := range keys {
-		if !s2.IsIndexed(k) {
-			t.Fatalf("key %s not indexed", k)
+
+	d2 := New(Options{
+		BasePath:     "index-test",
+		Transform:    simpleXf,
+		CacheSizeMax: 1024,
+		Index:        &LLRBIndex{},
+		IndexLess:    strLess,
+	})
+	defer d2.Flush()
+
+	// check d2 has properly loaded existing d1 data
+	for _, key := range keys {
+		if !d2.isIndexed(key) {
+			t.Fatalf("key '%s' not indexed on secondary", key)
 		}
 	}
+
 	// cache one
-	if readValue, err := s2.Read(keys[0]); err != nil {
+	if readValue, err := d2.Read(keys[0]); err != nil {
 		t.Fatalf("%s", err)
-	} else if bytes.Compare(v, readValue) != 0 {
-		t.Fatalf("%s: got %s, expected %s", keys[0], readValue, v)
+	} else if bytes.Compare(val, readValue) != 0 {
+		t.Fatalf("%s: got %s, expected %s", keys[0], readValue, val)
 	}
-	for i := 0; i < 10 && !s2.IsCached(keys[0]); i++ {
+
+	// make sure it got cached
+	for i := 0; i < 10 && !d2.isCached(keys[0]); i++ {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if !s2.IsCached(keys[0]) {
-		t.Fatalf("key %s not cached", keys[0])
+	if !d2.isCached(keys[0]) {
+		t.Fatalf("key '%s' not cached", keys[0])
 	}
+
 	// kill the disk
-	s.Flush()
-	// should still be there
-	if readValue2, err := s2.Read(keys[0]); err != nil {
+	d1.Flush()
+
+	// cached value should still be there in the second
+	if readValue, err := d2.Read(keys[0]); err != nil {
 		t.Fatalf("%s", err)
-	} else if bytes.Compare(v, readValue2) != 0 {
-		t.Fatalf("%s: got %s, expected %s", keys[0], readValue2, v)
+	} else if bytes.Compare(val, readValue) != 0 {
+		t.Fatalf("%s: got %s, expected %s", keys[0], readValue, val)
 	}
+
 	// but not in the original
-	if _, err := s.Read(keys[0]); err == nil {
+	if _, err := d1.Read(keys[0]); err == nil {
 		t.Fatalf("expected error reading from flushed store")
 	}
 }
-*/

@@ -25,11 +25,14 @@ type TransformFunction func(s string) []string
 
 // TODO
 type Index interface {
-	Initialize()
-	Insert(key string, val []byte)
+	Initialize(less LessFunction, keys <-chan string)
+	Insert(key string)
 	Delete(key string)
 	Keys(from string, n int) <-chan string
 }
+
+// TODO
+type LessFunction func(string, string) bool
 
 // TODO
 type Options struct {
@@ -40,6 +43,7 @@ type Options struct {
 	FilePerm     os.FileMode
 
 	Index       Index
+	IndexLess   LessFunction
 	Compression io.ReadWriteCloser
 }
 
@@ -53,7 +57,7 @@ type Diskv struct {
 // New returns an initialized Diskv structure, ready to use.
 // If the path identified by baseDir already contains data,
 // it will be accessible, but not yet cached.
-func New(options *Options) *Diskv {
+func New(options Options) *Diskv {
 	if options.PathPerm == 0 {
 		options.PathPerm = defaultPathPerm
 	}
@@ -61,11 +65,17 @@ func New(options *Options) *Diskv {
 		options.FilePerm = defaultFilePerm
 	}
 
-	return &Diskv{
-		Options:   *options,
+	d := &Diskv{
+		Options:   options,
 		cache:     map[string][]byte{},
 		cacheSize: 0,
 	}
+
+	if d.Index != nil && d.IndexLess != nil {
+		d.Index.Initialize(d.IndexLess, d.Keys())
+	}
+
+	return d
 }
 
 // Write synchronously writes the key-value pair to disk,
@@ -98,7 +108,7 @@ func (d *Diskv) Write(key string, val []byte) error {
 	}
 
 	if d.Index != nil {
-		// TODO
+		d.Index.Insert(key)
 	}
 
 	delete(d.cache, key) // cache only on read
@@ -140,6 +150,11 @@ func (d *Diskv) Erase(key string) error {
 	if val, ok := d.cache[key]; ok {
 		d.cacheSize -= uint64(len(val))
 		delete(d.cache, key)
+	}
+
+	// erase from index
+	if d.Index != nil {
+		d.Index.Delete(key)
 	}
 
 	// erase from disk

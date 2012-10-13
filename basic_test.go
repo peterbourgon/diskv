@@ -18,7 +18,7 @@ func (d *Diskv) isCached(key string) bool {
 }
 
 func TestWriteReadErase(t *testing.T) {
-	d := New(&Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1024})
+	d := New(Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1024})
 	defer d.Flush()
 	k, v := "a", []byte{'b'}
 	if err := d.Write(k, v); err != nil {
@@ -35,7 +35,7 @@ func TestWriteReadErase(t *testing.T) {
 }
 
 func TestWRECache(t *testing.T) {
-	d := New(&Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1024})
+	d := New(Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1024})
 	defer d.Flush()
 	k, v := "xxx", []byte{' ', ' ', ' '}
 	if d.isCached(k) {
@@ -67,7 +67,7 @@ func TestWRECache(t *testing.T) {
 }
 
 func TestStrings(t *testing.T) {
-	d := New(&Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1024})
+	d := New(Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1024})
 	//defer d.Flush()
 
 	keys := map[string]bool{"a": false, "b": false, "c": false, "d": false}
@@ -95,7 +95,7 @@ func TestStrings(t *testing.T) {
 }
 
 func TestZeroByteCache(t *testing.T) {
-	d := New(&Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 0})
+	d := New(Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 0})
 	defer d.Flush()
 	k, v := "a", []byte{'1', '2', '3'}
 	if err := d.Write(k, v); err != nil {
@@ -113,7 +113,7 @@ func TestZeroByteCache(t *testing.T) {
 }
 
 func TestOneByteCache(t *testing.T) {
-	d := New(&Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1})
+	d := New(Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1})
 	defer d.Flush()
 	k1, k2, v1, v2 := "a", "b", []byte{'1'}, []byte{'1', '2'}
 	if err := d.Write(k1, v1); err != nil {
@@ -146,7 +146,7 @@ func TestOneByteCache(t *testing.T) {
 }
 
 func TestStaleCache(t *testing.T) {
-	d := New(&Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1})
+	d := New(Options{BasePath: "test-data", Transform: dumbXf, CacheSizeMax: 1})
 	defer d.Flush()
 	k, first, second := "a", "first", "second"
 	if err := d.Write(k, []byte(first)); err != nil {
