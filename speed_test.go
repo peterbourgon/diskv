@@ -41,40 +41,43 @@ func (d *Diskv) load(keys []string, val []byte) {
 
 func benchRead(b *testing.B, size, cachesz int) {
 	b.StopTimer()
-	s := New(Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: uint64(cachesz)})
-	defer s.Flush()
+	d := New(Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: uint64(cachesz)})
+	defer d.Flush()
 	keys := genKeys()
 	value := genValue(size)
-	s.load(keys, value)
+	d.load(keys, value)
 	shuffle(keys)
 	b.SetBytes(int64(size))
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = s.Read(keys[i%len(keys)])
+		_, _ = d.Read(keys[i%len(keys)])
 	}
 	b.StopTimer()
 }
 
 func benchWrite(b *testing.B, size int, withIndex bool) {
 	b.StopTimer()
-	type Writeable interface {
-		Write(k string, v []byte) error
-		Flush() error
+
+	options := Options{
+		BasePath:     "speed-test",
+		Transform:    dumbXf,
+		CacheSizeMax: 0,
 	}
-	var s Writeable = nil
 	if withIndex {
-		s = New(Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: 0}) // TODO
-	} else {
-		s = New(Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: 0})
+		options.Index = &LLRBIndex{}
+		options.IndexLess = strLess
 	}
-	defer s.Flush()
+
+	d := New(options)
+	defer d.Flush()
 	keys := genKeys()
 	value := genValue(size)
 	shuffle(keys)
 	b.SetBytes(int64(size))
+
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		s.Write(keys[i%len(keys)], value)
+		d.Write(keys[i%len(keys)], value)
 	}
 	b.StopTimer()
 }
