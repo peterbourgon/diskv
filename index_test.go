@@ -42,7 +42,7 @@ func TestIndexOrder(t *testing.T) {
 		Index:        &LLRBIndex{},
 		IndexLess:    strLess,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 
 	v := []byte{'1', '2', '3'}
 	d.Write("a", v)
@@ -72,7 +72,7 @@ func TestIndexLoad(t *testing.T) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
-	defer d1.Flush()
+	defer d1.EraseAll()
 
 	val := []byte{'1', '2', '3'}
 	keys := []string{"a", "b", "c", "d", "e", "f", "g"}
@@ -87,7 +87,7 @@ func TestIndexLoad(t *testing.T) {
 		Index:        &LLRBIndex{},
 		IndexLess:    strLess,
 	})
-	defer d2.Flush()
+	defer d2.EraseAll()
 
 	// check d2 has properly loaded existing d1 data
 	for _, key := range keys {
@@ -112,7 +112,7 @@ func TestIndexLoad(t *testing.T) {
 	}
 
 	// kill the disk
-	d1.Flush()
+	d1.EraseAll()
 
 	// cached value should still be there in the second
 	if readValue, err := d2.Read(keys[0]); err != nil {

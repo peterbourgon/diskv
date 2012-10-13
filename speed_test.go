@@ -46,7 +46,7 @@ func benchRead(b *testing.B, size, cachesz int) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: uint64(cachesz),
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 
 	keys := genKeys()
 	value := genValue(size)
@@ -75,7 +75,7 @@ func benchWrite(b *testing.B, size int, withIndex bool) {
 	}
 
 	d := New(options)
-	defer d.Flush()
+	defer d.EraseAll()
 	keys := genKeys()
 	value := genValue(size)
 	shuffle(keys)

@@ -51,7 +51,7 @@ func main() {
 	}
 	fmt.Printf("%d total keys\n", keyCount)
 
-	// s.Flush() // leave it commented out to see how data is kept on disk
+	// s.EraseAll() // leave it commented out to see how data is kept on disk
 }
 
 func md5sum(s string) string {

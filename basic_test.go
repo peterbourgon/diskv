@@ -19,7 +19,7 @@ func TestWriteReadErase(t *testing.T) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 	k, v := "a", []byte{'b'}
 	if err := d.Write(k, v); err != nil {
 		t.Fatalf("write: %s", err)
@@ -40,7 +40,7 @@ func TestWRECache(t *testing.T) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 	k, v := "xxx", []byte{' ', ' ', ' '}
 	if d.isCached(k) {
 		t.Fatalf("key cached before Write and Read")
@@ -76,7 +76,7 @@ func TestStrings(t *testing.T) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 
 	keys := map[string]bool{"a": false, "b": false, "c": false, "d": false}
 	v := []byte{'1'}
@@ -108,7 +108,7 @@ func TestZeroByteCache(t *testing.T) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 0,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 
 	k, v := "a", []byte{'1', '2', '3'}
 	if err := d.Write(k, v); err != nil {
@@ -134,7 +134,7 @@ func TestOneByteCache(t *testing.T) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 
 	k1, k2, v1, v2 := "a", "b", []byte{'1'}, []byte{'1', '2'}
 	if err := d.Write(k1, v1); err != nil {
@@ -177,7 +177,7 @@ func TestStaleCache(t *testing.T) {
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 
 	k, first, second := "a", "first", "second"
 	if err := d.Write(k, []byte(first)); err != nil {

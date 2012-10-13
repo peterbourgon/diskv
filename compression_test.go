@@ -20,7 +20,7 @@ func testCompressionWith(t *testing.T, c Compression, name string) {
 		CacheSizeMax: 0,
 		Compression:  c,
 	})
-	defer d.Flush()
+	defer d.EraseAll()
 
 	sz := 4096
 	val := make([]byte, sz)

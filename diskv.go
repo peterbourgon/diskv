@@ -81,9 +81,23 @@ func New(options Options) *Diskv {
 	return d
 }
 
-// Write synchronously writes the key-value pair to disk,
-// making it immediately available for reads.
+// Write synchronously writes the key-value pair to disk, making it immediately
+// available for reads. Write relies on the filesystem to perform an eventual
+// sync to physical media. If you need stronger guarantees, use WriteAndSync.
 func (d *Diskv) Write(key string, val []byte) error {
+	return d.write(key, val, false)
+}
+
+// WriteAndSync does the same thing as Write, but explicitly calls
+// Sync on the relevant file descriptor.
+func (d *Diskv) WriteAndSync(key string, val []byte) error {
+	return d.write(key, val, true)
+}
+
+// write synchronously writes the key-value pair to disk,
+// making it immediately available for reads. write optionally
+// performs a Sync on the relevant file descriptor.
+func (d *Diskv) write(key string, val []byte, sync bool) error {
 	if len(key) <= 0 {
 		return fmt.Errorf("empty key")
 	}
@@ -108,6 +122,13 @@ func (d *Diskv) Write(key string, val []byte) error {
 	if _, err = f.Write(compressedVal); err != nil {
 		f.Close() // error deliberately ignored
 		return err
+	}
+
+	if sync {
+		if err := f.Sync(); err != nil {
+			f.Close() // error deliberately ignored
+			return err
+		}
 	}
 
 	if err := f.Close(); err != nil {
@@ -182,12 +203,12 @@ func (d *Diskv) Erase(key string) error {
 	return nil
 }
 
-// Flush will delete all of the data from the store, both
-// in the cache and on the disk. Note that Flush doesn't
+// EraseAll will delete all of the data from the store, both
+// in the cache and on the disk. Note that EraseAll doesn't
 // distinguish diskv-related data from non-diskv-related data.
 // Care should be taken to always specify a diskv base directory
 // that is exclusively for diskv data.
-func (d *Diskv) Flush() error {
+func (d *Diskv) EraseAll() error {
 	d.Lock()
 	defer d.Unlock()
 	d.cache = make(map[string][]byte)
