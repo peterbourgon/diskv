@@ -33,15 +33,15 @@ func genKeys() []string {
 	return keys
 }
 
-func (s *Store) load(keys []string, v []byte) {
-	for _, k := range keys {
-		s.Write(k, v)
+func (d *Diskv) load(keys []string, val []byte) {
+	for _, key := range keys {
+		d.Write(key, val)
 	}
 }
 
 func benchRead(b *testing.B, size, cachesz int) {
 	b.StopTimer()
-	s := NewStore("speed-test", dumbXf, uint(cachesz))
+	s := New(&Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: uint64(cachesz)})
 	defer s.Flush()
 	keys := genKeys()
 	value := genValue(size)
@@ -63,9 +63,9 @@ func benchWrite(b *testing.B, size int, withIndex bool) {
 	}
 	var s Writeable = nil
 	if withIndex {
-		s = NewOrderedStore("speed-test", dumbXf, 0)
+		s = New(&Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: 0}) // TODO
 	} else {
-		s = NewStore("speed-test", dumbXf, 0)
+		s = New(&Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: 0})
 	}
 	defer s.Flush()
 	keys := genKeys()
