@@ -41,7 +41,7 @@ func main() {
 	}
 	for _, valueStr := range data {
 		key, value := md5sum(valueStr), bytes.NewBufferString(valueStr).Bytes()
-		s.Write(key, value)
+		d.Write(key, value)
 	}
 
 	keyChan, keyCount := d.Keys(), 0
