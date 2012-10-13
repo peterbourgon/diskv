@@ -6,22 +6,25 @@ import (
 )
 
 func main() {
-	flatTransform := func(s string) []string { return []string{""} }
-	s := diskv.NewStore("my-store-dir", flatTransform, 1024*1024)
+	d := diskv.New(diskv.Options{
+		BasePath:     "my-diskv-data-directory",
+		Transform:    func(s string) []string { return []string{} },
+		CacheSizeMax: 1024 * 1024, // 1MB
+	})
 
 	key := "alpha"
-	writeErr := s.Write(key, []byte{'1', '2', '3'})
+	writeErr := d.Write(key, []byte{'1', '2', '3'})
 	if writeErr != nil {
 		panic(fmt.Sprintf("%s", writeErr))
 	}
 
-	value, readErr := s.Read(key)
+	value, readErr := d.Read(key)
 	if readErr != nil {
 		panic(fmt.Sprintf("%s", readErr))
 	}
 	fmt.Printf("%v\n", value)
 
-	eraseErr := s.Erase(key)
+	eraseErr := d.Erase(key)
 	if eraseErr != nil {
 		panic(fmt.Sprintf("%s", eraseErr))
 	}

@@ -23,7 +23,11 @@ func BlockTransform(s string) []string {
 }
 
 func main() {
-	s := diskv.NewStore("data-dir", BlockTransform, 1024*1024)
+	d := diskv.New(diskv.Options{
+		BasePath:     "data",
+		Transform:    BlockTransform,
+		CacheSizeMax: 1024 * 1024, // 1MB
+	})
 
 	data := []string{
 		"I am the very model of a modern Major-General",
@@ -40,9 +44,9 @@ func main() {
 		s.Write(key, value)
 	}
 
-	keyChan, keyCount := s.Keys(), 0
+	keyChan, keyCount := d.Keys(), 0
 	for key, ok := <-keyChan; ok; key, ok = <-keyChan {
-		value, err := s.Read(key)
+		value, err := d.Read(key)
 		if err != nil {
 			panic(fmt.Sprintf("key %s had no value", key))
 		}
@@ -51,7 +55,7 @@ func main() {
 	}
 	fmt.Printf("%d total keys\n", keyCount)
 
-	// s.EraseAll() // leave it commented out to see how data is kept on disk
+	// d.EraseAll() // leave it commented out to see how data is kept on disk
 }
 
 func md5sum(s string) string {
