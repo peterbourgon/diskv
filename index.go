@@ -5,6 +5,24 @@ import (
 	"sync"
 )
 
+// Index is a generic interface for things that can
+// provide an ordered list of keys.
+type Index interface {
+	Initialize(less LessFunction, keys <-chan string)
+	Insert(key string)
+	Delete(key string)
+	Keys(from string, n int) <-chan string
+}
+
+// LessFunction is used to initialize an Index of keys in a specific order.
+type LessFunction func(string, string) bool
+
+//
+//
+//
+
+// LLRBIndex is an implementation of the Index interface
+// using Petar Maymounkov's LLRB tree.
 type LLRBIndex struct {
 	sync.RWMutex
 	tree *llrb.Tree

@@ -2,7 +2,6 @@ package diskv
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -28,18 +27,6 @@ var (
 // the final location of the data file will be <basedir>/ab/cde/f/abcdef
 type TransformFunction func(s string) []string
 
-// Index is a generic interface for things that can
-// provide an ordered list of keys.
-type Index interface {
-	Initialize(less LessFunction, keys <-chan string)
-	Insert(key string)
-	Delete(key string)
-	Keys(from string, n int) <-chan string
-}
-
-// LessFunction is used to initialize an Index of keys in a specific order.
-type LessFunction func(string, string) bool
-
 // Options define a set of properties that dictate Diskv behavior.
 // All values are optional.
 type Options struct {
@@ -52,7 +39,7 @@ type Options struct {
 	Index     Index
 	IndexLess LessFunction
 
-	Compression io.ReadWriteCloser
+	Compression Compression
 }
 
 // Diskv implements the Diskv interface. You shouldn't construct Diskv
@@ -117,9 +104,13 @@ func (d *Diskv) Write(key string, val []byte) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	if _, err = f.Write(compressedVal); err != nil {
+		f.Close() // error deliberately ignored
+		return err
+	}
+
+	if err := f.Close(); err != nil {
 		return err
 	}
 
@@ -221,14 +212,14 @@ func (d *Diskv) Keys() <-chan string {
 
 func (d *Diskv) compress(val []byte) ([]byte, error) {
 	if d.Compression != nil {
-		return val, nil // TODO
+		return compress(d.Compression, val)
 	}
 	return val, nil
 }
 
 func (d *Diskv) decompress(val []byte) ([]byte, error) {
 	if d.Compression != nil {
-		return val, nil // TODO
+		return decompress(d.Compression, val)
 	}
 	return val, nil
 }

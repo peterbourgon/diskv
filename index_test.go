@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-func simpleXf(k string) []string {
-	return []string{string(k)}
-}
-
 func strLess(a, b string) bool { return a < b }
 
 func cmp(a, b []string) bool {
@@ -41,7 +37,7 @@ func (d *Diskv) isIndexed(key string) bool {
 func TestIndexOrder(t *testing.T) {
 	d := New(Options{
 		BasePath:     "index-test",
-		Transform:    simpleXf,
+		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 		Index:        &LLRBIndex{},
 		IndexLess:    strLess,
@@ -73,7 +69,7 @@ func TestIndexOrder(t *testing.T) {
 func TestIndexLoad(t *testing.T) {
 	d1 := New(Options{
 		BasePath:     "index-test",
-		Transform:    simpleXf,
+		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
 	defer d1.Flush()
@@ -82,12 +78,11 @@ func TestIndexLoad(t *testing.T) {
 	keys := []string{"a", "b", "c", "d", "e", "f", "g"}
 	for _, key := range keys {
 		d1.Write(key, val)
-		t.Logf("d1: write '%s'", key)
 	}
 
 	d2 := New(Options{
 		BasePath:     "index-test",
-		Transform:    simpleXf,
+		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 		Index:        &LLRBIndex{},
 		IndexLess:    strLess,

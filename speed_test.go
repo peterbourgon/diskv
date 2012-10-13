@@ -41,13 +41,19 @@ func (d *Diskv) load(keys []string, val []byte) {
 
 func benchRead(b *testing.B, size, cachesz int) {
 	b.StopTimer()
-	d := New(Options{BasePath: "speed-test", Transform: dumbXf, CacheSizeMax: uint64(cachesz)})
+	d := New(Options{
+		BasePath:     "speed-test",
+		Transform:    func(string) []string { return []string{} },
+		CacheSizeMax: uint64(cachesz),
+	})
 	defer d.Flush()
+
 	keys := genKeys()
 	value := genValue(size)
 	d.load(keys, value)
 	shuffle(keys)
 	b.SetBytes(int64(size))
+
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = d.Read(keys[i%len(keys)])
@@ -60,7 +66,7 @@ func benchWrite(b *testing.B, size int, withIndex bool) {
 
 	options := Options{
 		BasePath:     "speed-test",
-		Transform:    dumbXf,
+		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 0,
 	}
 	if withIndex {
