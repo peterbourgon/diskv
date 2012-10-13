@@ -13,16 +13,15 @@ performant, disk-backed storage system.
 
 # Installing
 
-Install [Go][3], either [from source][4] or [with a prepackaged binary][5]. Be
-sure to get at least weekly-2012-03-13 ("Go 1 RC1") or later. Then, run
+Install [Go 1][3], either [from source][4] or [with a prepackaged binary][5].
 
 ```
 $ go get -v github.com/peterbourgon/diskv
 ```
 
-[3]: http://weekly.golang.org
-[4]: http://weekly.golang.org/doc/install/source
-[5]: http://weekly.golang.org/doc/install
+[3]: http://golang.org
+[4]: http://golang.org/doc/install/source
+[5]: http://golang.org/doc/install
 
 # Usage
 
@@ -37,10 +36,14 @@ import (
 func main() {
 	// Simple transform function to put all of the data files into the root directory.
 	flatTransform := func(s string) []string { return []string{""} }
-
-	// Initialize a new diskv store, rooted at "my-store-dir", with a 1MB cache.
-	s := diskv.NewStore("my-store-dir", flatTransform, 1024*1024)
 	
+	// Initialize a new diskv store, rooted at "my-data-dir", with a 1MB cache.
+	d := diskv.New(diskv.Options{
+		BasePath:     "my-data-dir",
+		Transform:    flatTransform,
+		CacheSizeMax: 1024 * 1024, 
+	})
+
 	// Write three bytes to the key "alpha".
 	key := "alpha"
 	s.Write(key, []byte{'1', '2', '3'})
@@ -67,7 +70,7 @@ TransformFunc,
 
 ```
 func SimpleTransform (key string) []string {
-    return []string{""}
+    return []string{} // equivalent to []string{""}
 }
 ```
 
@@ -87,18 +90,24 @@ your data via common UNIX commandline tools.
 An in-memory caching layer is provided by combining the BasicStore
 functionality with a simple map structure, and keeping it up-to-date as
 appropriate. Since the map structure in Go is not threadsafe, it's combined
-with a RWMutex  to provide safe concurrent access. 
+with a RWMutex to provide safe concurrent access. 
 
 # Adding order
 
 diskv is a key-value store and therefore inherently unordered. An ordering
-system can be grafted on by combining the Store functionality with [Petar
-Maymounkov's Left-leaning Red-black tree implementation][7]. Basically, diskv
-can keep an in-memory index of the keys, ordered by a user-provided LessThan
-function. The index is naïvely populated at startup from the keys on-disk, and
-kept up-to-date as appropriate.
+system can be injected into the store by passing something which satisfies the
+diskv.Index interface.  (A default implementation, using Petar Maymounkov's
+[LLRB tree][7], is provided.) Basically, diskv keeps an ordered (by a
+user-provided Less function) index of the keys, which can be queried.
 
 [7]: https://github.com/petar/GoLLRB 
+
+# Adding compression
+
+Something which implements the diskv.Compression interface may be passed
+during store creation, so that all Writes and Reads are filtered through
+a compression/decompression pipeline. Several default implementations,
+using stdlib compression algorithms, are provided.
 
 # Future plans
  
