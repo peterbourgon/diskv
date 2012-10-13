@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/md5"
 	"fmt"
 	"github.com/peterbourgon/diskv"
@@ -40,17 +39,17 @@ func main() {
 		"With many cheerful facts about the square of the hypotenuse",
 	}
 	for _, valueStr := range data {
-		key, value := md5sum(valueStr), bytes.NewBufferString(valueStr).Bytes()
-		d.Write(key, value)
+		key, val := md5sum(valueStr), []byte(valueStr)
+		d.Write(key, val)
 	}
 
 	keyChan, keyCount := d.Keys(), 0
 	for key, ok := <-keyChan; ok; key, ok = <-keyChan {
-		value, err := d.Read(key)
+		val, err := d.Read(key)
 		if err != nil {
 			panic(fmt.Sprintf("key %s had no value", key))
 		}
-		fmt.Printf("%s: %s\n", key, value)
+		fmt.Printf("%s: %s\n", key, val)
 		keyCount++
 	}
 	fmt.Printf("%d total keys\n", keyCount)
