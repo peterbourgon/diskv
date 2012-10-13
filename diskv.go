@@ -11,8 +11,13 @@ import (
 )
 
 const (
+	defaultBasePath             = "diskv"
 	defaultFilePerm os.FileMode = 0666
 	defaultPathPerm os.FileMode = 0777
+)
+
+var (
+	defaultTransform = func(s string) []string { return []string{""} }
 )
 
 // A TransformFunc transforms a key into a slice of strings, with each
@@ -23,7 +28,8 @@ const (
 // the final location of the data file will be <basedir>/ab/cde/f/abcdef
 type TransformFunction func(s string) []string
 
-// TODO
+// Index is a generic interface for things that can
+// provide an ordered list of keys.
 type Index interface {
 	Initialize(less LessFunction, keys <-chan string)
 	Insert(key string)
@@ -31,10 +37,11 @@ type Index interface {
 	Keys(from string, n int) <-chan string
 }
 
-// TODO
+// LessFunction is used to initialize an Index of keys in a specific order.
 type LessFunction func(string, string) bool
 
-// TODO
+// Options define a set of properties that dictate Diskv behavior.
+// All values are optional.
 type Options struct {
 	BasePath     string
 	Transform    TransformFunction
@@ -42,11 +49,14 @@ type Options struct {
 	PathPerm     os.FileMode
 	FilePerm     os.FileMode
 
-	Index       Index
-	IndexLess   LessFunction
+	Index     Index
+	IndexLess LessFunction
+
 	Compression io.ReadWriteCloser
 }
 
+// Diskv implements the Diskv interface. You shouldn't construct Diskv
+// structures directly; instead, use the New constructor.
 type Diskv struct {
 	sync.RWMutex
 	Options
@@ -58,6 +68,12 @@ type Diskv struct {
 // If the path identified by baseDir already contains data,
 // it will be accessible, but not yet cached.
 func New(options Options) *Diskv {
+	if options.BasePath == "" {
+		options.BasePath = defaultBasePath
+	}
+	if options.Transform == nil {
+		options.Transform = defaultTransform
+	}
 	if options.PathPerm == 0 {
 		options.PathPerm = defaultPathPerm
 	}
