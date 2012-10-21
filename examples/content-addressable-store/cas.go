@@ -44,7 +44,7 @@ func main() {
 	}
 
 	keyChan, keyCount := d.Keys(), 0
-	for key, ok := <-keyChan; ok; key, ok = <-keyChan {
+	for key := range keyChan {
 		val, err := d.Read(key)
 		if err != nil {
 			panic(fmt.Sprintf("key %s had no value", key))
