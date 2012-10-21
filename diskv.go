@@ -1,3 +1,6 @@
+// Diskv (disk-vee) is a simple, persistent key-value store.
+// It stores all data flatly on the filesystem.
+
 package diskv
 
 import (

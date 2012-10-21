@@ -29,6 +29,8 @@ type LLRBIndex struct {
 	less llrb.LessFunc
 }
 
+// Initialize populates the LLRB tree with data from the keys channel,
+// according to the passed less function. It's destructive to the LLRBIndex.
 func (i *LLRBIndex) Initialize(less LessFunction, keys <-chan string) {
 	i.Lock()
 	defer i.Unlock()
@@ -38,6 +40,7 @@ func (i *LLRBIndex) Initialize(less LessFunction, keys <-chan string) {
 	i.tree = rebuild(llrbLess, keys)
 }
 
+// Insert inserts the given key (only) into the LLRB tree.
 func (i *LLRBIndex) Insert(key string) {
 	i.Lock()
 	defer i.Unlock()
@@ -47,6 +50,7 @@ func (i *LLRBIndex) Insert(key string) {
 	i.tree.ReplaceOrInsert(key)
 }
 
+// Delete removes the given key (only) from the LLRB tree.
 func (i *LLRBIndex) Delete(key string) {
 	i.Lock()
 	defer i.Unlock()
@@ -56,13 +60,12 @@ func (i *LLRBIndex) Delete(key string) {
 	i.tree.Delete(key)
 }
 
-// Keys yields a maximum of n keys on the returned channel, in order.
+// Keys yields a maximum of n keys on the returned channel, in order. It's
+// designed to effect a simple "pagniation" of keys.
 //
-// If the passed 'from' key is empty, Keys will return the first count keys.
-// If the passed 'from' key is non-empty, the first key in the returned slice
-// will be the key that immediately follows the passed key, in key order.
-//
-// Keys is designed to effect a simple "pagination" of keys.
+// If the passed 'from' key is empty, Keys will return the first n keys. If the
+// passed 'from' key is non-empty, the first key in the returned slice will be
+// the key that immediately follows the passed key, in key order.
 func (i *LLRBIndex) Keys(from string, n int) <-chan string {
 	i.RLock()
 	defer i.RUnlock()
