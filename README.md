@@ -46,14 +46,14 @@ func main() {
 
 	// Write three bytes to the key "alpha".
 	key := "alpha"
-	s.Write(key, []byte{'1', '2', '3'})
+	d.Write(key, []byte{'1', '2', '3'})
 	
 	// Read the value back out of the store.
-	value, _ := s.Read(key)
+	value, _ := d.Read(key)
 	fmt.Printf("%v\n", value)
 	
 	// Erase the key+value from the store (and the disk).
-	s.Erase(key)
+	d.Erase(key)
 }
 ```
 
