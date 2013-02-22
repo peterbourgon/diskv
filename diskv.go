@@ -123,7 +123,7 @@ func (d *Diskv) write(key string, reader io.Reader, sync bool) error {
 		return err
 	}
 
-	if err = d.maybeWriteCompressed(reader, f); err != nil {
+	if err = d.maybeWriteCompressed(f, reader); err != nil {
 		f.Close() // error deliberately ignored
 		return err
 	}
@@ -182,8 +182,11 @@ func (d *Diskv) ReadStream(key string, writer io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return d.maybeReadDecompressed(f, writer)
+	if err = d.maybeReadDecompressed(writer, f); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // Erase synchronously erases the given key from the disk and the cache.
@@ -262,7 +265,7 @@ func (d *Diskv) decompress(val []byte) ([]byte, error) {
 	return val, nil
 }
 
-func (d *Diskv) maybeWriteCompressed(reader io.Reader, writer io.Writer) error {
+func (d *Diskv) maybeWriteCompressed(writer io.Writer, reader io.Reader) error {
 	if d.Compression != nil {
 		return d.Compression.Compress(writer, reader)
 	}
@@ -270,7 +273,7 @@ func (d *Diskv) maybeWriteCompressed(reader io.Reader, writer io.Writer) error {
 	return err
 }
 
-func (d *Diskv) maybeReadDecompressed(reader io.Reader, writer io.Writer) error {
+func (d *Diskv) maybeReadDecompressed(writer io.Writer, reader io.Reader) error {
 	if d.Compression != nil {
 		return d.Compression.Decompress(writer, reader)
 	}
