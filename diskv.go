@@ -4,7 +4,9 @@
 package diskv
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -88,19 +90,23 @@ func New(options Options) *Diskv {
 // available for reads. Write relies on the filesystem to perform an eventual
 // sync to physical media. If you need stronger guarantees, use WriteAndSync.
 func (d *Diskv) Write(key string, val []byte) error {
-	return d.write(key, val, false)
+	return d.write(key, bytes.NewBuffer(val), false)
+}
+
+func (d *Diskv) WriteStream(key string, reader io.Reader) error {
+	return d.write(key, reader, false)
 }
 
 // WriteAndSync does the same thing as Write, but explicitly calls
 // Sync on the relevant file descriptor.
 func (d *Diskv) WriteAndSync(key string, val []byte) error {
-	return d.write(key, val, true)
+	return d.write(key, bytes.NewBuffer(val), true)
 }
 
 // write synchronously writes the key-value pair to disk,
 // making it immediately available for reads. write optionally
 // performs a Sync on the relevant file descriptor.
-func (d *Diskv) write(key string, val []byte, sync bool) error {
+func (d *Diskv) write(key string, reader io.Reader, sync bool) error {
 	if len(key) <= 0 {
 		return fmt.Errorf("empty key")
 	}
@@ -111,18 +117,13 @@ func (d *Diskv) write(key string, val []byte, sync bool) error {
 		return err
 	}
 
-	compressedVal, err := d.compress(val)
-	if err != nil {
-		return err
-	}
-
 	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists
 	f, err := os.OpenFile(d.completeFilename(key), mode, d.FilePerm)
 	if err != nil {
 		return err
 	}
 
-	if _, err = f.Write(compressedVal); err != nil {
+	if err = d.maybeWriteCompressed(reader, f); err != nil {
 		f.Close() // error deliberately ignored
 		return err
 	}
@@ -170,6 +171,19 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 
 	// return
 	return d.decompress(val)
+}
+
+func (d *Diskv) ReadStream(key string, writer io.Writer) error {
+	d.RLock()
+	defer d.RUnlock()
+
+	// read from disk
+	f, err := os.Open(d.completeFilename(key))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return d.maybeReadDecompressed(f, writer)
 }
 
 // Erase synchronously erases the given key from the disk and the cache.
@@ -246,6 +260,22 @@ func (d *Diskv) decompress(val []byte) ([]byte, error) {
 		return decompress(d.Compression, val)
 	}
 	return val, nil
+}
+
+func (d *Diskv) maybeWriteCompressed(reader io.Reader, writer io.Writer) error {
+	if d.Compression != nil {
+		return d.Compression.Compress(writer, reader)
+	}
+	_, err := io.Copy(writer, reader)
+	return err
+}
+
+func (d *Diskv) maybeReadDecompressed(reader io.Reader, writer io.Writer) error {
+	if d.Compression != nil {
+		return d.Compression.Decompress(writer, reader)
+	}
+	_, err := io.Copy(writer, reader)
+	return err
 }
 
 // walker returns a function which satisfies the filepath.WalkFunc interface.
