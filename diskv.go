@@ -178,7 +178,15 @@ func (d *Diskv) ReadStream(key string, writer io.Writer) error {
 	defer d.RUnlock()
 
 	// read from disk
-	f, err := os.Open(d.completeFilename(key))
+	filename := d.completeFilename(key)
+	stat, err := os.Stat(filename)
+	if err != nil {
+		return err
+	}
+	if stat.IsDir() {
+		return os.ErrNotExist
+	}
+	f, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
