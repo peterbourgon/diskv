@@ -4,7 +4,9 @@
 package diskv
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -70,6 +72,9 @@ func New(options Options) *Diskv {
 	if options.FilePerm == 0 {
 		options.FilePerm = defaultFilePerm
 	}
+	if options.Compression == nil {
+		options.Compression = NewNopCompression()
+	}
 
 	d := &Diskv{
 		Options:   options,
@@ -86,21 +91,19 @@ func New(options Options) *Diskv {
 
 // Write synchronously writes the key-value pair to disk, making it immediately
 // available for reads. Write relies on the filesystem to perform an eventual
-// sync to physical media. If you need stronger guarantees, use WriteAndSync.
+// sync to physical media. If you need stronger guarantees, see WriteStream.
 func (d *Diskv) Write(key string, val []byte) error {
-	return d.write(key, val, false)
+	return d.write(key, bytes.NewBuffer(val), false)
 }
 
-// WriteAndSync does the same thing as Write, but explicitly calls
-// Sync on the relevant file descriptor.
-func (d *Diskv) WriteAndSync(key string, val []byte) error {
-	return d.write(key, val, true)
+func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
+	return d.write(key, r, sync)
 }
 
 // write synchronously writes the key-value pair to disk,
 // making it immediately available for reads. write optionally
 // performs a Sync on the relevant file descriptor.
-func (d *Diskv) write(key string, val []byte, sync bool) error {
+func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 	if len(key) <= 0 {
 		return fmt.Errorf("empty key")
 	}
@@ -108,34 +111,39 @@ func (d *Diskv) write(key string, val []byte, sync bool) error {
 	d.Lock()
 	defer d.Unlock()
 	if err := d.ensurePath(key); err != nil {
-		return err
-	}
-
-	compressedVal, err := d.compress(val)
-	if err != nil {
-		return err
+		return fmt.Errorf("ensure path: %s", err)
 	}
 
 	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists
 	f, err := os.OpenFile(d.completeFilename(key), mode, d.FilePerm)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file: %s", err)
 	}
 
-	if _, err = f.Write(compressedVal); err != nil {
+	w, err := d.Compression.Writer(f)
+	if err != nil {
 		f.Close() // error deliberately ignored
-		return err
+		return fmt.Errorf("compression writer: %s", err)
+	}
+
+	if _, err := io.Copy(w, r); err != nil {
+		f.Close() // error deliberately ignored
+		return fmt.Errorf("i/o copy: %s", err)
+	}
+
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("compression close: %s", err)
 	}
 
 	if sync {
 		if err := f.Sync(); err != nil {
 			f.Close() // error deliberately ignored
-			return err
+			return fmt.Errorf("file sync: %s", err)
 		}
 	}
 
 	if err := f.Close(); err != nil {
-		return err
+		return fmt.Errorf("file close: %s", err)
 	}
 
 	if d.Index != nil {
@@ -151,25 +159,70 @@ func (d *Diskv) write(key string, val []byte, sync bool) error {
 // If the key is not in the cache, Read will have the side-effect of
 // lazily caching the value.
 func (d *Diskv) Read(key string) ([]byte, error) {
-	d.RLock()
-	defer d.RUnlock()
-
-	// check cache first
-	if val, ok := d.cache[key]; ok {
-		return d.decompress(val)
+	rc, err := d.ReadStream(key)
+	if err != nil {
+		return []byte{}, err
 	}
+	defer rc.Close()
 
-	// read from disk
-	val, err := ioutil.ReadFile(d.completeFilename(key))
+	buf, err := ioutil.ReadAll(rc)
 	if err != nil {
 		return []byte{}, err
 	}
 
-	// cache lazily
-	go d.cacheWithoutLock(key, val)
+	return buf, nil
+}
 
-	// return
-	return d.decompress(val)
+func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
+	d.RLock()
+	defer d.RUnlock()
+
+	var r io.Reader
+	if val, ok := d.cache[key]; ok {
+		r = bytes.NewBuffer(val) // values are cached compressed
+	} else {
+		f, err := os.Open(d.completeFilename(key))
+		if err != nil {
+			return nil, err
+		}
+		r = newSiphon(f, d, key)
+	}
+
+	return d.Compression.Reader(r)
+}
+
+type siphon struct {
+	f   *os.File
+	d   *Diskv
+	key string
+	buf *bytes.Buffer
+}
+
+func newSiphon(f *os.File, d *Diskv, key string) io.Reader {
+	return &siphon{
+		f:   f,
+		d:   d,
+		key: key,
+		buf: &bytes.Buffer{},
+	}
+}
+
+func (s *siphon) Read(p []byte) (int, error) {
+	n, err := s.f.Read(p)
+
+	if err == nil {
+		s.buf.Write(p[0:n]) // Write must succeed for Read to succeed
+	}
+
+	if err == io.EOF {
+		s.d.cacheWithoutLock(s.key, s.buf.Bytes()) // cache may fail
+		if closeErr := s.f.Close(); closeErr != nil {
+			return n, closeErr // close must succeed for Read to succeed
+		}
+		return n, err
+	}
+
+	return n, err
 }
 
 // Erase synchronously erases the given key from the disk and the cache.
@@ -206,11 +259,10 @@ func (d *Diskv) Erase(key string) error {
 	return nil
 }
 
-// EraseAll will delete all of the data from the store, both
-// in the cache and on the disk. Note that EraseAll doesn't
-// distinguish diskv-related data from non-diskv-related data.
-// Care should be taken to always specify a diskv base directory
-// that is exclusively for diskv data.
+// EraseAll will delete all of the data from the store, both in the cache and on
+// the disk. Note that EraseAll doesn't distinguish diskv-related data from non-
+// diskv-related data. Care should be taken to always specify a diskv base
+// directory that is exclusively for diskv data.
 func (d *Diskv) EraseAll() error {
 	d.Lock()
 	defer d.Unlock()
@@ -219,8 +271,8 @@ func (d *Diskv) EraseAll() error {
 	return os.RemoveAll(d.BasePath)
 }
 
-// Keys returns a channel that will yield every key
-// accessible by the store in undefined order.
+// Keys returns a channel that will yield every key accessible by the store in
+// undefined order.
 func (d *Diskv) Keys() <-chan string {
 	c := make(chan string)
 	go func() {
@@ -234,20 +286,6 @@ func (d *Diskv) Keys() <-chan string {
 //
 //
 
-func (d *Diskv) compress(val []byte) ([]byte, error) {
-	if d.Compression != nil {
-		return compress(d.Compression, val)
-	}
-	return val, nil
-}
-
-func (d *Diskv) decompress(val []byte) ([]byte, error) {
-	if d.Compression != nil {
-		return decompress(d.Compression, val)
-	}
-	return val, nil
-}
-
 // walker returns a function which satisfies the filepath.WalkFunc interface.
 // It sends every non-directory file entry down the channel c.
 func walker(c chan string) func(path string, info os.FileInfo, err error) error {
@@ -259,8 +297,8 @@ func walker(c chan string) func(path string, info os.FileInfo, err error) error 
 	}
 }
 
-// pathFor returns the absolute path for location on the filesystem
-// where the data for the given key will be stored.
+// pathFor returns the absolute path for location on the filesystem where the
+// data for the given key will be stored.
 func (d *Diskv) pathFor(key string) string {
 	return fmt.Sprintf(
 		"%s%c%s",
@@ -270,8 +308,8 @@ func (d *Diskv) pathFor(key string) string {
 	)
 }
 
-// ensureDir is a helper function that generates all necessary
-// directories on the filesystem for the given key.
+// ensureDir is a helper function that generates all necessary directories on
+// the filesystem for the given key.
 func (d *Diskv) ensurePath(key string) error {
 	return os.MkdirAll(d.pathFor(key), d.PathPerm)
 }
@@ -281,15 +319,15 @@ func (d *Diskv) completeFilename(key string) string {
 	return fmt.Sprintf("%s%c%s", d.pathFor(key), os.PathSeparator, key)
 }
 
-// cacheWithLock attempts to cache the given key-value pair in the
-// store's cache. It can fail if the value is larger than the cache's
-// maximum size.
+// cacheWithLock attempts to cache the given key-value pair in the store's
+// cache. It can fail if the value is larger than the cache's maximum size.
 func (d *Diskv) cacheWithLock(key string, val []byte) error {
 	valueSize := uint64(len(val))
 	if err := d.ensureCacheSpaceFor(valueSize); err != nil {
 		return fmt.Errorf("%s; not caching", err)
 	}
 
+	// be very strict about memory guarantees
 	if (d.cacheSize + valueSize) > d.CacheSizeMax {
 		panic(
 			fmt.Sprintf(
@@ -305,8 +343,7 @@ func (d *Diskv) cacheWithLock(key string, val []byte) error {
 	return nil
 }
 
-// cacheWithoutLock acquires the store's (write) mutex
-// and calls cacheWithLock.
+// cacheWithoutLock acquires the store's (write) mutex and calls cacheWithLock.
 func (d *Diskv) cacheWithoutLock(key string, val []byte) error {
 	d.Lock()
 	defer d.Unlock()
@@ -348,8 +385,8 @@ func (d *Diskv) pruneDirs(key string) error {
 	return nil
 }
 
-// ensureCacheSpaceFor deletes entries from the cache in arbitrary order
-// until the cache has at least valueSize bytes available.
+// ensureCacheSpaceFor deletes entries from the cache in arbitrary order until
+// the cache has at least valueSize bytes available.
 func (d *Diskv) ensureCacheSpaceFor(valueSize uint64) error {
 	if valueSize > d.CacheSizeMax {
 		return fmt.Errorf(
