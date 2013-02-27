@@ -96,6 +96,7 @@ func (d *Diskv) Write(key string, val []byte) error {
 	return d.write(key, bytes.NewBuffer(val), false)
 }
 
+// TODO
 func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 	return d.write(key, r, sync)
 }
@@ -173,6 +174,7 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 	return buf, nil
 }
 
+// TODO
 func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
 	d.RLock()
 	defer d.RUnlock()
@@ -191,6 +193,7 @@ func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
 	return d.Compression.Reader(r)
 }
 
+// TODO
 type siphon struct {
 	f   *os.File
 	d   *Diskv
@@ -198,6 +201,7 @@ type siphon struct {
 	buf *bytes.Buffer
 }
 
+// TODO
 func newSiphon(f *os.File, d *Diskv, key string) io.Reader {
 	return &siphon{
 		f:   f,
@@ -207,11 +211,12 @@ func newSiphon(f *os.File, d *Diskv, key string) io.Reader {
 	}
 }
 
+// TODO
 func (s *siphon) Read(p []byte) (int, error) {
 	n, err := s.f.Read(p)
 
 	if err == nil {
-		s.buf.Write(p[0:n]) // Write must succeed for Read to succeed
+		return s.buf.Write(p[0:n]) // Write must succeed for Read to succeed
 	}
 
 	if err == io.EOF {
