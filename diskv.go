@@ -72,9 +72,6 @@ func New(options Options) *Diskv {
 	if options.FilePerm == 0 {
 		options.FilePerm = defaultFilePerm
 	}
-	if options.Compression == nil {
-		options.Compression = NewNopCompression()
-	}
 
 	d := &Diskv{
 		Options:   options,
@@ -127,18 +124,21 @@ func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 		return fmt.Errorf("open file: %s", err)
 	}
 
-	w, err := d.Compression.Writer(f)
-	if err != nil {
-		f.Close() // error deliberately ignored
-		return fmt.Errorf("compression writer: %s", err)
+	var wc io.WriteCloser = &nopWriteCloser{f}
+	if d.Compression != nil {
+		wc, err = d.Compression.Writer(f)
+		if err != nil {
+			f.Close() // error deliberately ignored
+			return fmt.Errorf("compression writer: %s", err)
+		}
 	}
 
-	if _, err := io.Copy(w, r); err != nil {
+	if _, err := io.Copy(wc, r); err != nil {
 		f.Close() // error deliberately ignored
 		return fmt.Errorf("i/o copy: %s", err)
 	}
 
-	if err := w.Close(); err != nil {
+	if err := wc.Close(); err != nil {
 		return fmt.Errorf("compression close: %s", err)
 	}
 
@@ -173,11 +173,14 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 
 	if val, ok := d.cache[key]; ok {
 		d.RUnlock()
-		r, err := d.Compression.Reader(bytes.NewBuffer(val))
-		if err != nil {
-			return []byte{}, err
+		if d.Compression != nil {
+			r, err := d.Compression.Reader(bytes.NewBuffer(val))
+			if err != nil {
+				return []byte{}, err
+			}
+			return ioutil.ReadAll(r)
 		}
-		return ioutil.ReadAll(r)
+		return val, nil
 	}
 
 	rc, err := d.read(key)
@@ -218,7 +221,16 @@ func (d *Diskv) read(key string) (io.ReadCloser, error) {
 	}
 
 	r := newSiphon(f, d, key)
-	return d.Compression.Reader(r)
+
+	var rc io.ReadCloser = ioutil.NopCloser(r)
+	if d.Compression != nil {
+		rc, err = d.Compression.Reader(r)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return rc, nil
 }
 
 // siphon is like a TeeReader: it copies all data read through it to an
@@ -450,3 +462,12 @@ func (d *Diskv) ensureCacheSpaceFor(valueSize uint64) error {
 
 	return nil
 }
+
+// nopWriteCloser wraps an io.Writer and provides a no-op Close method to
+// satisfy the io.WriteCloser interface.
+type nopWriteCloser struct {
+	w io.Writer
+}
+
+func (wc *nopWriteCloser) Write(p []byte) (int, error) { return wc.w.Write(p) }
+func (wc *nopWriteCloser) Close() error                { return nil }

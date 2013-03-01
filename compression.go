@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"compress/zlib"
 	"io"
-	"io/ioutil"
 )
 
 // Compression is an interface that Diskv uses to implement compression of
@@ -32,20 +31,9 @@ func (g *GenericCompression) Reader(src io.Reader) (io.ReadCloser, error) {
 	return g.rf(src)
 }
 
-type nopCloser struct{ io.Writer }
-
-func (w nopCloser) Close() error { return nil }
-
 //
 //
 //
-
-func NewNopCompression() Compression {
-	return &GenericCompression{
-		wf: func(w io.Writer) (io.WriteCloser, error) { return nopCloser{w}, nil },
-		rf: func(r io.Reader) (io.ReadCloser, error) { return ioutil.NopCloser(r), nil },
-	}
-}
 
 func NewGzipCompression() Compression {
 	return NewGzipCompressionLevel(flate.DefaultCompression)
