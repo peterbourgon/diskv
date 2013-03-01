@@ -1,4 +1,4 @@
-// Diskv (disk-vee) is a simple, persistent key-value store.
+// Diskv (disk-vee) is a simple, persistent, key-value store.
 // It stores all data flatly on the filesystem.
 
 package diskv
@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	defaultTransform = func(s string) []string { return []string{""} }
+	defaultTransform = func(s string) []string { return []string{} }
 )
 
 // A TransformFunc transforms a key into a slice of strings, with each
@@ -96,7 +96,11 @@ func (d *Diskv) Write(key string, val []byte) error {
 	return d.write(key, bytes.NewBuffer(val), false)
 }
 
-// TODO
+// WriteStream writes the data represented by the io.Reader to the disk, under
+// the provided key. If sync is true, WriteStream performs an explicit sync on
+// the file as soon as it's written.
+//
+// bytes.Buffer provides io.Reader semantics for basic data types.
 func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 	return d.write(key, r, sync)
 }
@@ -108,6 +112,8 @@ func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 	if len(key) <= 0 {
 		return fmt.Errorf("empty key")
 	}
+
+	// TODO use atomic FS ops in write()
 
 	d.Lock()
 	defer d.Unlock()
@@ -174,7 +180,12 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 	return buf, nil
 }
 
-// TODO
+// ReadStream reads the key and returns the value (data) as an io.ReadCloser.
+// If the value is cached from a previous read, ReadStream will use the cached
+// value. Otherwise, it will return a handle to the file on disk.
+//
+// ReadStream taps into the io.Reader stream prior to decompression, and caches
+// that data, if it's able to.
 func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
 	d.RLock()
 	defer d.RUnlock()
@@ -193,7 +204,8 @@ func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
 	return d.Compression.Reader(r)
 }
 
-// TODO
+// siphon is like a TeeReader: it copies all data read through it to an
+// internal buffer, and moves that buffer to the cache at EOF.
 type siphon struct {
 	f   *os.File
 	d   *Diskv
@@ -201,7 +213,9 @@ type siphon struct {
 	buf *bytes.Buffer
 }
 
-// TODO
+// newSiphon constructs a siphoning reader that represents the passed file.
+// When a successful series of reads ends in an EOF, the siphon will write
+// the buffered data to Diskv's cache under the given key.
 func newSiphon(f *os.File, d *Diskv, key string) io.Reader {
 	return &siphon{
 		f:   f,
@@ -211,7 +225,7 @@ func newSiphon(f *os.File, d *Diskv, key string) io.Reader {
 	}
 }
 
-// TODO
+// Read implements the io.Reader interface for siphon.
 func (s *siphon) Read(p []byte) (int, error) {
 	n, err := s.f.Read(p)
 
