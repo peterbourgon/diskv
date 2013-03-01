@@ -166,18 +166,28 @@ func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 // If the key is not in the cache, Read will have the side-effect of
 // lazily caching the value.
 func (d *Diskv) Read(key string) ([]byte, error) {
-	rc, err := d.ReadStream(key)
+	d.RLock()
+	// We have to do a manual dance with the read lock here, because
+	// the ReadCloser returned by read() will attempt to siphon (write)
+	// to the cache.
+
+	if val, ok := d.cache[key]; ok {
+		d.RUnlock()
+		r, err := d.Compression.Reader(bytes.NewBuffer(val))
+		if err != nil {
+			return []byte{}, err
+		}
+		return ioutil.ReadAll(r)
+	}
+
+	rc, err := d.read(key)
+	d.RUnlock()
 	if err != nil {
 		return []byte{}, err
 	}
 	defer rc.Close()
 
-	buf, err := ioutil.ReadAll(rc)
-	if err != nil {
-		return []byte{}, err
-	}
-
-	return buf, nil
+	return ioutil.ReadAll(rc)
 }
 
 // ReadStream reads the key and returns the value (data) as an io.ReadCloser.
@@ -190,17 +200,24 @@ func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
 	d.RLock()
 	defer d.RUnlock()
 
-	var r io.Reader
 	if val, ok := d.cache[key]; ok {
-		r = bytes.NewBuffer(val) // values are cached compressed
-	} else {
-		f, err := os.Open(d.completeFilename(key))
-		if err != nil {
-			return nil, err
-		}
-		r = newSiphon(f, d, key)
+		return d.Compression.Reader(bytes.NewBuffer(val))
 	}
 
+	return d.read(key)
+}
+
+// read ignores the cache, and returns an io.ReadCloser representing the
+// decompressed data for the given key, streamed from the disk. Clients should
+// acquire a read lock on the Diskv and check the cache themselves before
+// calling read.
+func (d *Diskv) read(key string) (io.ReadCloser, error) {
+	f, err := os.Open(d.completeFilename(key))
+	if err != nil {
+		return nil, err
+	}
+
+	r := newSiphon(f, d, key)
 	return d.Compression.Reader(r)
 }
 
