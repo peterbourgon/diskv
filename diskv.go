@@ -204,7 +204,11 @@ func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
 	defer d.RUnlock()
 
 	if val, ok := d.cache[key]; ok {
-		return d.Compression.Reader(bytes.NewBuffer(val))
+		buf := bytes.NewBuffer(val)
+		if d.Compression != nil {
+			return d.Compression.Reader(buf)
+		}
+		return ioutil.NopCloser(buf), nil
 	}
 
 	return d.read(key)
