@@ -219,7 +219,17 @@ func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
 // acquire a read lock on the Diskv and check the cache themselves before
 // calling read.
 func (d *Diskv) read(key string) (io.ReadCloser, error) {
-	f, err := os.Open(d.completeFilename(key))
+	filename := d.completeFilename(key)
+
+	fi, err := os.Stat(filename)
+	if err != nil {
+		return nil, err
+	}
+	if fi.IsDir() {
+		return nil, os.ErrNotExist
+	}
+
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
