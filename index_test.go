@@ -2,14 +2,13 @@ package diskv
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 	"time"
 )
 
 func strLess(a, b string) bool { return a < b }
 
-func cmp(a, b []string) bool {
+func cmpStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -59,9 +58,8 @@ func TestIndexOrder(t *testing.T) {
 	for key := range d.Index.Keys("", 100) {
 		keys = append(keys, key)
 	}
-	fmt.Printf("got %d keys\n", len(keys))
 
-	if !cmp(keys, expectedKeys) {
+	if !cmpStrings(keys, expectedKeys) {
 		t.Fatalf("got %s, expected %s", keys, expectedKeys)
 	}
 }
