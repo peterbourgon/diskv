@@ -17,7 +17,7 @@ performant, disk-backed storage system.
 Install [Go 1][3], either [from source][4] or [with a prepackaged binary][5].
 Then,
 
-```
+```bash
 $ go get github.com/peterbourgon/diskv
 ```
 
@@ -74,7 +74,7 @@ The key determines where that file will be stored, via a user-provided
 corresponding to a path list where the key file will be stored. The simplest
 TransformFunc,
 
-```
+```go
 func SimpleTransform (key string) []string {
     return []string{}
 }
@@ -85,6 +85,18 @@ will place all keys in the same, base directory. The design is inspired by
 behavior is available in the content-addressable-storage example.
 
 [6]: http://groups.google.com/group/redis-db/browse_thread/thread/d444bc786689bde9?pli=1
+
+**Note** that your TransformFunc should ensure that one valid key doesn't
+transform to a subset of another valid key. That is, it shouldn't be possible
+to construct valid keys that resolve to directory names. As a concrete example,
+if your TransformFunc splits on every 3 characters, then
+
+```go
+d.Write("abcabc", val) // OK: written to <base>/abc/abc/abcabc
+d.Write("abc", val)    // Error: attempted write to <base>/abc/abc, but it's a directory
+```
+
+This will be addressed in an upcoming version of diskv.
 
 Probably the most important design principle behind diskv is that your data is
 always flatly available on the disk. diskv will never do anything that would
