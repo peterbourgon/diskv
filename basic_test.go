@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+func cmpBytes(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (d *Diskv) isCached(key string) bool {
 	d.RLock()
 	defer d.RUnlock()
@@ -141,8 +153,10 @@ func TestOneByteCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := d.Read(k1); err != nil {
+	if v, err := d.Read(k1); err != nil {
 		t.Fatal(err)
+	} else if !cmpBytes(v, v1) {
+		t.Fatal("Read: expected %s, got %s", string(v1), string(v))
 	}
 
 	for i := 0; i < 10 && !d.isCached(k1); i++ {
@@ -156,7 +170,7 @@ func TestOneByteCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := d.Read(k2); err != nil {
-		t.Fatal(err)
+		t.Fatalf("--> %s", err)
 	}
 
 	for i := 0; i < 10 && (!d.isCached(k1) || d.isCached(k2)); i++ {
