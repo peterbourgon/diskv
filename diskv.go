@@ -344,6 +344,28 @@ func (d *Diskv) Keys() <-chan string {
 	return c
 }
 
+// Exists checks for the existence of a specific key
+func (d *Diskv) Exists(key string) (bool, error) {
+	if _, ok := d.cache[key]; ok {
+		return true, nil
+	}
+	filename := d.completeFilename(key)
+	fi, err := os.Stat(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
+	return !fi.IsDir(), nil
+}
+
+// IsNotExist checks if an error was caused due to a non-existent key
+func IsNotExist(err error) bool {
+	return os.IsNotExist(err)
+}
+
 //
 //
 //
