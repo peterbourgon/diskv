@@ -219,3 +219,55 @@ func TestStaleCache(t *testing.T) {
 		t.Errorf("expected '%s', got '%s'", second, v)
 	}
 }
+
+func TestExists(t *testing.T) {
+	d := New(Options{
+		BasePath:     "test-data",
+		Transform:    func(string) []string { return []string{} },
+		CacheSizeMax: 1,
+	})
+	defer d.EraseAll()
+
+	ok, err := d.Exists("foo")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ok {
+		t.Fatal("Exists should return false before key is inserted")
+	}
+
+	if err := d.Write("foo", []byte("bar")); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err = d.Exists("foo")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !ok {
+		t.Fatal("Exists should return true after key is inserted")
+	}
+}
+
+func TestIsNotExist(t *testing.T) {
+	d := New(Options{
+		BasePath:     "test-data",
+		Transform:    func(string) []string { return []string{} },
+		CacheSizeMax: 1,
+	})
+	defer d.EraseAll()
+
+	_, err := d.Read("foo")
+
+	if err == nil {
+		t.Fatal("expected error when reading unset key, got nil")
+	}
+
+	if !IsNotExist(err) {
+		t.Fatal("expected IsNotExist to return true when error is caused by unset key")
+	}
+}
