@@ -25,7 +25,7 @@ func (d *Diskv) isIndexed(key string) bool {
 		return false
 	}
 
-	for got := range d.Index.Keys("", 1000) {
+	for _, got := range d.Index.Keys("", 1000) {
 		if got == key {
 			return true
 		}
@@ -55,7 +55,7 @@ func TestIndexOrder(t *testing.T) {
 
 	expectedKeys := []string{"-", "1", "A", "a", "m"}
 	keys := []string{}
-	for key := range d.Index.Keys("", 100) {
+	for _, key := range d.Index.Keys("", 100) {
 		keys = append(keys, key)
 	}
 

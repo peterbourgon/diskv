@@ -344,10 +344,6 @@ func (d *Diskv) Keys() <-chan string {
 	return c
 }
 
-//
-//
-//
-
 // walker returns a function which satisfies the filepath.WalkFunc interface.
 // It sends every non-directory file entry down the channel c.
 func walker(c chan string) func(path string, info os.FileInfo, err error) error {

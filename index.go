@@ -11,22 +11,30 @@ type Index interface {
 	Initialize(less LessFunction, keys <-chan string)
 	Insert(key string)
 	Delete(key string)
-	Keys(from string, n int) <-chan string
+	Keys(from string, n int) []string
 }
 
 // LessFunction is used to initialize an Index of keys in a specific order.
 type LessFunction func(string, string) bool
 
-//
-//
-//
+// llrbString is a custom data type that satisfies the LLRB Less interface,
+// making the strings it wraps sortable by the LLRB package.
+type llrbString struct {
+	s string
+	l LessFunction
+}
+
+// Less satisfies the llrb.Less interface using the llrbString's LessFunction.
+func (s llrbString) Less(i llrb.Item) bool {
+	return s.l(s.s, i.(llrbString).s)
+}
 
 // LLRBIndex is an implementation of the Index interface
 // using Petar Maymounkov's LLRB tree.
 type LLRBIndex struct {
 	sync.RWMutex
-	tree *llrb.Tree
-	less llrb.LessFunc
+	less LessFunction
+	tree *llrb.LLRB
 }
 
 // Initialize populates the LLRB tree with data from the keys channel,
@@ -34,10 +42,8 @@ type LLRBIndex struct {
 func (i *LLRBIndex) Initialize(less LessFunction, keys <-chan string) {
 	i.Lock()
 	defer i.Unlock()
-
-	llrbLess := convert(less)
-	i.less = llrbLess
-	i.tree = rebuild(llrbLess, keys)
+	i.less = less
+	i.tree = rebuild(less, keys)
 }
 
 // Insert inserts the given key (only) into the LLRB tree.
@@ -47,7 +53,7 @@ func (i *LLRBIndex) Insert(key string) {
 	if i.tree == nil || i.less == nil {
 		panic("uninitialized index")
 	}
-	i.tree.ReplaceOrInsert(key)
+	i.tree.ReplaceOrInsert(llrbString{s: key, l: i.less})
 }
 
 // Delete removes the given key (only) from the LLRB tree.
@@ -57,16 +63,14 @@ func (i *LLRBIndex) Delete(key string) {
 	if i.tree == nil || i.less == nil {
 		panic("uninitialized index")
 	}
-	i.tree.Delete(key)
+	i.tree.Delete(llrbString{s: key, l: i.less})
 }
 
-// Keys yields a maximum of n keys on the returned channel, in order. It's
-// designed to effect a simple "pagniation" of keys.
-//
-// If the passed 'from' key is empty, Keys will return the first n keys. If the
-// passed 'from' key is non-empty, the first key in the returned slice will be
-// the key that immediately follows the passed key, in key order.
-func (i *LLRBIndex) Keys(from string, n int) <-chan string {
+// Keys yields a maximum of n keys in order. If the passed 'from' key is empty,
+// Keys will return the first n keys. If the passed 'from' key is non-empty, the
+// first key in the returned slice will be the key that immediately follows the
+// passed key, in key order.
+func (i *LLRBIndex) Keys(from string, n int) []string {
 	i.RLock()
 	defer i.RUnlock()
 
@@ -75,67 +79,37 @@ func (i *LLRBIndex) Keys(from string, n int) <-chan string {
 	}
 
 	if i.tree.Len() <= 0 {
-		// return immediately-closed (empty) chan
-		c := make(chan string)
-		go close(c)
-		return c
+		return []string{}
 	}
 
+	llrbFrom := llrbString{s: from, l: i.less}
 	skipFirst := true
-	if len(from) <= 0 || !i.tree.Has(from) {
-		from = i.tree.Min().(string) // no such key, so start at the top
+	if len(from) <= 0 || !i.tree.Has(llrbFrom) {
+		// no such key, so start at the top
+		llrbFrom = i.tree.Min().(llrbString)
 		skipFirst = false
 	}
 
-	c0 := i.tree.IterRange(from, i.tree.Max())
-	if skipFirst {
-		<-c0
+	keys := []string{}
+	iterator := func(i llrb.Item) bool {
+		keys = append(keys, i.(llrbString).s)
+		return len(keys) < n
+	}
+	i.tree.AscendGreaterOrEqual(llrbFrom, iterator)
+
+	if skipFirst && len(keys) > 0 {
+		keys = keys[1:]
 	}
 
-	c := make(chan string)
-	go func() {
-		wasClosed, sent := false, 0
-		for ; sent < n; sent++ {
-			key, ok := <-c0
-			if !ok {
-				wasClosed = true
-				break
-			}
-			c <- key.(string)
-		}
-		if wasClosed && sent < n {
-			// hack to get around IterRange returning only E < @upper
-			c <- i.tree.Max().(string)
-		}
-		close(c)
-	}()
-	return c
-}
-
-//
-//
-//
-
-// convert converts the Diskv.LessFunction to a format
-// usable by the LLRB tree.
-func convert(f LessFunction) llrb.LessFunc {
-	return func(a, b interface{}) bool {
-		aStr, aOk := a.(string)
-		bStr, bOk := b.(string)
-		if !aOk || !bOk {
-			panic("non-string key")
-		}
-
-		return f(aStr, bStr)
-	}
+	return keys
 }
 
 // rebuildIndex does the work of regenerating the index
 // with the given keys.
-func rebuild(less llrb.LessFunc, keys <-chan string) *llrb.Tree {
-	tree := llrb.New(less)
+func rebuild(less LessFunction, keys <-chan string) *llrb.LLRB {
+	tree := llrb.New()
 	for key := range keys {
-		tree.ReplaceOrInsert(key)
+		tree.ReplaceOrInsert(llrbString{s: key, l: less})
 	}
 	return tree
 }
