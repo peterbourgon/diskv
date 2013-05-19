@@ -8,8 +8,8 @@ performant, disk-backed storage system.
 
 [![Build Status][1]][2]
 
-[1]: https://secure.travis-ci.org/peterbourgon/diskv.png
-[2]: http://www.travis-ci.org/peterbourgon/diskv
+[1]: https://drone.io/github.com/peterbourgon/diskv/status.png
+[2]: https://drone.io/github.com/peterbourgon/diskv/latest
 
 
 # Installing
@@ -114,7 +114,7 @@ with a RWMutex to provide safe concurrent access.
 
 diskv is a key-value store and therefore inherently unordered. An ordering
 system can be injected into the store by passing something which satisfies the
-diskv.Index interface.  (A default implementation, using Petar Maymounkov's
+diskv.Index interface. (A default implementation, using Petar Maymounkov's
 [LLRB tree][7], is provided.) Basically, diskv keeps an ordered (by a
 user-provided Less function) index of the keys, which can be queried.
 
