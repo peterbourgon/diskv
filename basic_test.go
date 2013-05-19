@@ -28,7 +28,6 @@ func (d *Diskv) isCached(key string) bool {
 func TestWriteReadErase(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
 	defer d.EraseAll()
@@ -49,7 +48,6 @@ func TestWriteReadErase(t *testing.T) {
 func TestWRECache(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
 	defer d.EraseAll()
@@ -85,7 +83,6 @@ func TestWRECache(t *testing.T) {
 func TestStrings(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
 	defer d.EraseAll()
@@ -117,7 +114,6 @@ func TestStrings(t *testing.T) {
 func TestZeroByteCache(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 0,
 	})
 	defer d.EraseAll()
@@ -143,7 +139,6 @@ func TestZeroByteCache(t *testing.T) {
 func TestOneByteCache(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1,
 	})
 	defer d.EraseAll()
@@ -188,7 +183,6 @@ func TestOneByteCache(t *testing.T) {
 func TestStaleCache(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1,
 	})
 	defer d.EraseAll()
@@ -217,5 +211,43 @@ func TestStaleCache(t *testing.T) {
 
 	if string(v) != second {
 		t.Errorf("expected '%s', got '%s'", second, v)
+	}
+}
+
+func TestHas(t *testing.T) {
+	d := New(Options{
+		BasePath:     "test-data",
+		CacheSizeMax: 1024,
+	})
+	defer d.EraseAll()
+
+	for k, v := range map[string]string{
+		"a":      "1",
+		"foo":    "2",
+		"012345": "3",
+	} {
+		d.Write(k, []byte(v))
+	}
+
+	d.Read("foo") // cache one of them
+	if !d.isCached("foo") {
+		t.Errorf("'foo' didn't get cached")
+	}
+
+	for _, tuple := range []struct {
+		key      string
+		expected bool
+	}{
+		{"a", true},
+		{"b", false},
+		{"foo", true},
+		{"bar", false},
+		{"01234", false},
+		{"012345", true},
+		{"0123456", false},
+	} {
+		if expected, got := tuple.expected, d.Has(tuple.key); expected != got {
+			t.Errorf("Has(%s): expected %v, got %v", tuple.key, expected, got)
+		}
 	}
 }

@@ -333,6 +333,27 @@ func (d *Diskv) EraseAll() error {
 	return os.RemoveAll(d.BasePath)
 }
 
+// Has returns true if the given key exists.
+func (d *Diskv) Has(key string) bool {
+	d.Lock()
+	defer d.Unlock()
+
+	if _, ok := d.cache[key]; ok {
+		return true
+	}
+
+	filename := d.completeFilename(key)
+	s, err := os.Stat(filename)
+	if err != nil {
+		return false
+	}
+	if s.IsDir() {
+		return false
+	}
+
+	return true
+}
+
 // Keys returns a channel that will yield every key accessible by the store in
 // undefined order.
 func (d *Diskv) Keys() <-chan string {
