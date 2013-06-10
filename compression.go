@@ -7,27 +7,27 @@ import (
 	"io"
 )
 
-// Compression is an interface that Diskv uses to implement compression of
-// data. You may define these methods on your own type, or use one of the
-// NewCompression helpers.
+// Compression is an interface that Diskv uses to implement compression of data.
+// Writer takes a destination io.Writer and returns a WriteCloser that
+// compresses all data written through it. Reader takes a source io.Reader and
+// returns a ReadCloser that decompresses all data read through it. You may
+// define these methods on your own type, or use one of the NewCompression
+// helpers.
 type Compression interface {
 	Writer(dst io.Writer) (io.WriteCloser, error)
 	Reader(src io.Reader) (io.ReadCloser, error)
 }
 
-// TODO
-type GenericCompression struct {
+type genericCompression struct {
 	wf func(w io.Writer) (io.WriteCloser, error)
 	rf func(r io.Reader) (io.ReadCloser, error)
 }
 
-// TODO
-func (g *GenericCompression) Writer(dst io.Writer) (io.WriteCloser, error) {
+func (g *genericCompression) Writer(dst io.Writer) (io.WriteCloser, error) {
 	return g.wf(dst)
 }
 
-// TODO
-func (g *GenericCompression) Reader(src io.Reader) (io.ReadCloser, error) {
+func (g *genericCompression) Reader(src io.Reader) (io.ReadCloser, error) {
 	return g.rf(src)
 }
 
@@ -40,7 +40,7 @@ func NewGzipCompression() Compression {
 }
 
 func NewGzipCompressionLevel(level int) Compression {
-	return &GenericCompression{
+	return &genericCompression{
 		wf: func(w io.Writer) (io.WriteCloser, error) { return gzip.NewWriterLevel(w, level) },
 		rf: func(r io.Reader) (io.ReadCloser, error) { return gzip.NewReader(r) },
 	}
@@ -55,7 +55,7 @@ func NewZlibCompressionLevel(level int) Compression {
 }
 
 func NewZlibCompressionLevelDict(level int, dict []byte) Compression {
-	return &GenericCompression{
+	return &genericCompression{
 		func(w io.Writer) (io.WriteCloser, error) { return zlib.NewWriterLevelDict(w, level, dict) },
 		func(r io.Reader) (io.ReadCloser, error) { return zlib.NewReaderDict(r, dict) },
 	}
