@@ -9,8 +9,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -383,7 +383,7 @@ func (d *Diskv) pathFor(key string) string {
 		"%s%c%s",
 		d.BasePath,
 		os.PathSeparator,
-		strings.Join(d.Transform(key), string(os.PathSeparator)),
+		path.Join(d.Transform(key)...),
 	)
 }
 
@@ -439,7 +439,7 @@ func (d *Diskv) pruneDirs(key string) error {
 			"%s%c%s",
 			d.BasePath,
 			os.PathSeparator,
-			strings.Join(pslice, string(os.PathSeparator)),
+			path.Join(pslice...),
 		)
 
 		// thanks to Steven Blenkinsop for this snippet
