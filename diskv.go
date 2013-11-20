@@ -9,8 +9,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -379,12 +379,7 @@ func walker(c chan string) func(path string, info os.FileInfo, err error) error 
 // pathFor returns the absolute path for location on the filesystem where the
 // data for the given key will be stored.
 func (d *Diskv) pathFor(key string) string {
-	return fmt.Sprintf(
-		"%s%c%s",
-		d.BasePath,
-		os.PathSeparator,
-		strings.Join(d.Transform(key), string(os.PathSeparator)),
-	)
+	return path.Join(d.BasePath, path.Join(d.Transform(key)...))
 }
 
 // ensureDir is a helper function that generates all necessary directories on
@@ -435,12 +430,7 @@ func (d *Diskv) pruneDirs(key string) error {
 	pathlist := d.Transform(key)
 	for i := range pathlist {
 		pslice := pathlist[:len(pathlist)-i]
-		dir := fmt.Sprintf(
-			"%s%c%s",
-			d.BasePath,
-			os.PathSeparator,
-			strings.Join(pslice, string(os.PathSeparator)),
-		)
+		dir := path.Join(d.BasePath, path.Join(pslice...))
 
 		// thanks to Steven Blenkinsop for this snippet
 		switch fi, err := os.Stat(dir); true {

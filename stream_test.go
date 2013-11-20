@@ -21,7 +21,7 @@ func TestBasicStreamCaching(t *testing.T) {
 	}
 
 	if d.isCached(key) {
-		t.Fatalf("'%s' cached, but shouldn't be (yet)")
+		t.Fatalf("'%s' cached, but shouldn't be (yet)", key)
 	}
 
 	rc, err := d.ReadStream(key)
@@ -39,6 +39,6 @@ func TestBasicStreamCaching(t *testing.T) {
 	}
 
 	if !d.isCached(key) {
-		t.Fatalf("'%s' isn't cached, but should be")
+		t.Fatalf("'%s' isn't cached, but should be", key)
 	}
 }

@@ -151,7 +151,7 @@ func TestOneByteCache(t *testing.T) {
 	if v, err := d.Read(k1); err != nil {
 		t.Fatal(err)
 	} else if !cmpBytes(v, v1) {
-		t.Fatal("Read: expected %s, got %s", string(v1), string(v))
+		t.Fatalf("Read: expected %s, got %s", string(v1), string(v))
 	}
 
 	for i := 0; i < 10 && !d.isCached(k1); i++ {
