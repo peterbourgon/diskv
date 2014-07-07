@@ -44,15 +44,19 @@ func TestBasicStreamCaching(t *testing.T) {
 }
 
 func TestReadStreamDirect(t *testing.T) {
+	var (
+		basePath  = "test-data"
+		transform = func(string) []string { return []string{} }
+	)
 	dWrite := New(Options{
-		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
+		BasePath:     basePath,
+		Transform:    transform,
 		CacheSizeMax: 0,
 	})
 	defer dWrite.EraseAll()
 	dRead := New(Options{
-		BasePath:     "test-data",
-		Transform:    func(string) []string { return []string{} },
+		BasePath:     basePath,
+		Transform:    transform,
 		CacheSizeMax: 1024,
 	})
 
