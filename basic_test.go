@@ -35,10 +35,10 @@ func TestWriteReadErase(t *testing.T) {
 	if err := d.Write(k, v); err != nil {
 		t.Fatalf("write: %s", err)
 	}
-	if read_v, err := d.Read(k); err != nil {
+	if readVal, err := d.Read(k); err != nil {
 		t.Fatalf("read: %s", err)
-	} else if bytes.Compare(v, read_v) != 0 {
-		t.Fatalf("read: expected %s, got %s", v, read_v)
+	} else if bytes.Compare(v, readVal) != 0 {
+		t.Fatalf("read: expected %s, got %s", v, readVal)
 	}
 	if err := d.Erase(k); err != nil {
 		t.Fatalf("erase: %s", err)
@@ -61,10 +61,10 @@ func TestWRECache(t *testing.T) {
 	if d.isCached(k) {
 		t.Fatalf("key cached before Read")
 	}
-	if read_v, err := d.Read(k); err != nil {
+	if readVal, err := d.Read(k); err != nil {
 		t.Fatalf("read: %s", err)
-	} else if bytes.Compare(v, read_v) != 0 {
-		t.Fatalf("read: expected %s, got %s", v, read_v)
+	} else if bytes.Compare(v, readVal) != 0 {
+		t.Fatalf("read: expected %s, got %s", v, readVal)
 	}
 	for i := 0; i < 10 && !d.isCached(k); i++ {
 		time.Sleep(10 * time.Millisecond)
@@ -89,7 +89,7 @@ func TestStrings(t *testing.T) {
 
 	keys := map[string]bool{"a": false, "b": false, "c": false, "d": false}
 	v := []byte{'1'}
-	for k, _ := range keys {
+	for k := range keys {
 		if err := d.Write(k, v); err != nil {
 			t.Fatalf("write: %s: %s", k, err)
 		}

@@ -25,7 +25,7 @@ func TestIssue2A(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		began := time.Now()
-		rc, err := d.ReadStream(key)
+		rc, err := d.ReadStream(key, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,7 +66,7 @@ func TestIssue2B(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := d.ReadStream("abc")
+	_, err := d.ReadStream("abc", false)
 	if err == nil {
 		t.Fatal("ReadStream('abc') should return error")
 	}

@@ -3,15 +3,16 @@ package main
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/peterbourgon/diskv"
 	"io"
+
+	"github.com/peterbourgon/diskv"
 )
 
 const (
 	transformBlockSize = 2 // grouping of chars per directory depth
 )
 
-func BlockTransform(s string) []string {
+func blockTransform(s string) []string {
 	sliceSize := len(s) / transformBlockSize
 	pathSlice := make([]string, sliceSize)
 	for i := 0; i < sliceSize; i++ {
@@ -24,7 +25,7 @@ func BlockTransform(s string) []string {
 func main() {
 	d := diskv.New(diskv.Options{
 		BasePath:     "data",
-		Transform:    BlockTransform,
+		Transform:    blockTransform,
 		CacheSizeMax: 1024 * 1024, // 1MB
 	})
 
