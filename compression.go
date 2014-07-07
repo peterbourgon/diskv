@@ -35,10 +35,12 @@ func (g *genericCompression) Reader(src io.Reader) (io.ReadCloser, error) {
 //
 //
 
+// NewGzipCompression returns a Gzip-based Compression.
 func NewGzipCompression() Compression {
 	return NewGzipCompressionLevel(flate.DefaultCompression)
 }
 
+// NewGzipCompressionLevel returns a Gzip-based Compression with the given level.
 func NewGzipCompressionLevel(level int) Compression {
 	return &genericCompression{
 		wf: func(w io.Writer) (io.WriteCloser, error) { return gzip.NewWriterLevel(w, level) },
@@ -46,14 +48,18 @@ func NewGzipCompressionLevel(level int) Compression {
 	}
 }
 
+// NewZlibCompression returns a Zlib-based Compression.
 func NewZlibCompression() Compression {
 	return NewZlibCompressionLevel(flate.DefaultCompression)
 }
 
+// NewZlibCompressionLevel returns a Zlib-based Compression with the given level.
 func NewZlibCompressionLevel(level int) Compression {
 	return NewZlibCompressionLevelDict(level, nil)
 }
 
+// NewZlibCompressionLevelDict returns a Zlib-based Compression with the given
+// level, based on the given dictionary.
 func NewZlibCompressionLevelDict(level int, dict []byte) Compression {
 	return &genericCompression{
 		func(w io.Writer) (io.WriteCloser, error) { return zlib.NewWriterLevelDict(w, level, dict) },

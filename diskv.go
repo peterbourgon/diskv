@@ -24,9 +24,9 @@ var (
 	defaultTransform = func(s string) []string { return []string{} }
 )
 
-// A TransformFunc transforms a key into a slice of strings, with each
-// element in the slice representing a directory in the file path
-// where the key's entry will eventually be stored.
+// TransformFunction transforms a key into a slice of strings, with each
+// element in the slice representing a directory in the file path where the
+// key's entry will eventually be stored.
 //
 // For example, if TransformFunc transforms "abcdef" to ["ab", "cde", "f"],
 // the final location of the data file will be <basedir>/ab/cde/f/abcdef
@@ -124,7 +124,7 @@ func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 		return fmt.Errorf("open file: %s", err)
 	}
 
-	var wc io.WriteCloser = &nopWriteCloser{f}
+	var wc = io.WriteCloser(&nopWriteCloser{f})
 	if d.Compression != nil {
 		wc, err = d.Compression.Writer(f)
 		if err != nil {
@@ -166,49 +166,39 @@ func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 // If the key is not in the cache, Read will have the side-effect of
 // lazily caching the value.
 func (d *Diskv) Read(key string) ([]byte, error) {
-	d.RLock()
-	// We have to do a manual dance with the read lock here, because
-	// the ReadCloser returned by read() will attempt to siphon (write)
-	// to the cache.
-
-	if val, ok := d.cache[key]; ok {
-		d.RUnlock()
-		if d.Compression != nil {
-			r, err := d.Compression.Reader(bytes.NewBuffer(val))
-			if err != nil {
-				return []byte{}, err
-			}
-			return ioutil.ReadAll(r)
-		}
-		return val, nil
-	}
-
-	rc, err := d.read(key)
-	d.RUnlock()
+	rc, err := d.ReadStream(key, false)
 	if err != nil {
 		return []byte{}, err
 	}
 	defer rc.Close()
-
 	return ioutil.ReadAll(rc)
 }
 
 // ReadStream reads the key and returns the value (data) as an io.ReadCloser.
-// If the value is cached from a previous read, ReadStream will use the cached
-// value. Otherwise, it will return a handle to the file on disk.
+// If the value is cached from a previous read, and direct is false,
+// ReadStream will use the cached value. Otherwise, it will return a handle to
+// the file on disk, and cache the data on read.
 //
-// ReadStream taps into the io.Reader stream prior to decompression, and caches
-// that data, if it's able to.
-func (d *Diskv) ReadStream(key string) (io.ReadCloser, error) {
+// If direct is true, ReadStream will always delete any cached value for the
+// key, and return a direct handle to the file on disk.
+//
+// ReadStream taps into the io.Reader stream prior to decompression, and
+// caches the compressed data.
+func (d *Diskv) ReadStream(key string, direct bool) (io.ReadCloser, error) {
 	d.RLock()
 	defer d.RUnlock()
 
 	if val, ok := d.cache[key]; ok {
-		buf := bytes.NewBuffer(val)
-		if d.Compression != nil {
-			return d.Compression.Reader(buf)
+		if direct {
+			d.cacheSize -= uint64(len(val))
+			delete(d.cache, key)
+		} else {
+			buf := bytes.NewBuffer(val)
+			if d.Compression != nil {
+				return d.Compression.Reader(buf)
+			}
+			return ioutil.NopCloser(buf), nil
 		}
-		return ioutil.NopCloser(buf), nil
 	}
 
 	return d.read(key)
@@ -236,7 +226,7 @@ func (d *Diskv) read(key string) (io.ReadCloser, error) {
 
 	r := newSiphon(f, d, key)
 
-	var rc io.ReadCloser = ioutil.NopCloser(r)
+	var rc = io.ReadCloser(ioutil.NopCloser(r))
 	if d.Compression != nil {
 		rc, err = d.Compression.Reader(r)
 		if err != nil {

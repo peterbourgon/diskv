@@ -8,7 +8,7 @@ import (
 
 func shuffle(keys []string) {
 	ints := rand.Perm(len(keys))
-	for i, _ := range keys {
+	for i := range keys {
 		keys[i], keys[ints[i]] = keys[ints[i]], keys[i]
 	}
 }
@@ -22,12 +22,12 @@ func genValue(size int) []byte {
 }
 
 const (
-	KEY_COUNT = 1000
+	keyCount = 1000
 )
 
 func genKeys() []string {
-	keys := make([]string, KEY_COUNT)
-	for i := 0; i < KEY_COUNT; i++ {
+	keys := make([]string, keyCount)
+	for i := 0; i < keyCount; i++ {
 		keys[i] = fmt.Sprintf("%d", i)
 	}
 	return keys
@@ -137,17 +137,17 @@ func BenchmarkRead_10KB_NoCache(b *testing.B) {
 }
 
 func BenchmarkRead_32B_WithCache(b *testing.B) {
-	benchRead(b, 32, KEY_COUNT*32*2)
+	benchRead(b, 32, keyCount*32*2)
 }
 
 func BenchmarkRead_1KB_WithCache(b *testing.B) {
-	benchRead(b, 1024, KEY_COUNT*1024*2)
+	benchRead(b, 1024, keyCount*1024*2)
 }
 
 func BenchmarkRead_4KB_WithCache(b *testing.B) {
-	benchRead(b, 4096, KEY_COUNT*4096*2)
+	benchRead(b, 4096, keyCount*4096*2)
 }
 
 func BenchmarkRead_10KB_WithCache(b *testing.B) {
-	benchRead(b, 10240, KEY_COUNT*4096*2)
+	benchRead(b, 10240, keyCount*4096*2)
 }
