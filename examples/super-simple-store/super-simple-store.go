@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/peterbourgon/diskv"
 )
 
@@ -13,19 +14,17 @@ func main() {
 	})
 
 	key := "alpha"
-	writeErr := d.Write(key, []byte{'1', '2', '3'})
-	if writeErr != nil {
-		panic(fmt.Sprintf("%s", writeErr))
+	if err := d.Write(key, []byte{'1', '2', '3'}); err != nil {
+		panic(err)
 	}
 
-	value, readErr := d.Read(key)
-	if readErr != nil {
-		panic(fmt.Sprintf("%s", readErr))
+	value, err := d.Read(key)
+	if err != nil {
+		panic(err)
 	}
 	fmt.Printf("%v\n", value)
 
-	eraseErr := d.Erase(key)
-	if eraseErr != nil {
-		panic(fmt.Sprintf("%s", eraseErr))
+	if err := d.Erase(key); err != nil {
+		panic(err)
 	}
 }
