@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -60,22 +59,22 @@ type Diskv struct {
 // New returns an initialized Diskv structure, ready to use.
 // If the path identified by baseDir already contains data,
 // it will be accessible, but not yet cached.
-func New(options Options) *Diskv {
-	if options.BasePath == "" {
-		options.BasePath = defaultBasePath
+func New(o Options) *Diskv {
+	if o.BasePath == "" {
+		o.BasePath = defaultBasePath
 	}
-	if options.Transform == nil {
-		options.Transform = defaultTransform
+	if o.Transform == nil {
+		o.Transform = defaultTransform
 	}
-	if options.PathPerm == 0 {
-		options.PathPerm = defaultPathPerm
+	if o.PathPerm == 0 {
+		o.PathPerm = defaultPathPerm
 	}
-	if options.FilePerm == 0 {
-		options.FilePerm = defaultFilePerm
+	if o.FilePerm == 0 {
+		o.FilePerm = defaultFilePerm
 	}
 
 	d := &Diskv{
-		Options:   options,
+		Options:   o,
 		cache:     map[string][]byte{},
 		cacheSize: 0,
 	}
@@ -91,7 +90,7 @@ func New(options Options) *Diskv {
 // available for reads. Write relies on the filesystem to perform an eventual
 // sync to physical media. If you need stronger guarantees, see WriteStream.
 func (d *Diskv) Write(key string, val []byte) error {
-	return d.write(key, bytes.NewBuffer(val), false)
+	return d.WriteStream(key, bytes.NewBuffer(val), false)
 }
 
 // WriteStream writes the data represented by the io.Reader to the disk, under
@@ -100,13 +99,6 @@ func (d *Diskv) Write(key string, val []byte) error {
 //
 // bytes.Buffer provides io.Reader semantics for basic data types.
 func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
-	return d.write(key, r, sync)
-}
-
-// write synchronously writes the key-value pair to disk,
-// making it immediately available for reads. write optionally
-// performs a Sync on the relevant file descriptor.
-func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 	if len(key) <= 0 {
 		return fmt.Errorf("empty key")
 	}
@@ -115,6 +107,7 @@ func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 
 	d.Lock()
 	defer d.Unlock()
+
 	if err := d.ensurePath(key); err != nil {
 		return fmt.Errorf("ensure path: %s", err)
 	}
@@ -125,7 +118,7 @@ func (d *Diskv) write(key string, r io.Reader, sync bool) error {
 		return fmt.Errorf("open file: %s", err)
 	}
 
-	var wc = io.WriteCloser(&nopWriteCloser{f})
+	wc := io.WriteCloser(&nopWriteCloser{f})
 	if d.Compression != nil {
 		wc, err = d.Compression.Writer(f)
 		if err != nil {
@@ -376,7 +369,7 @@ func walker(c chan string, prefix string) func(path string, info os.FileInfo, er
 // pathFor returns the absolute path for location on the filesystem where the
 // data for the given key will be stored.
 func (d *Diskv) pathFor(key string) string {
-	return path.Join(d.BasePath, path.Join(d.Transform(key)...))
+	return filepath.Join(d.BasePath, filepath.Join(d.Transform(key)...))
 }
 
 // ensureDir is a helper function that generates all necessary directories on
@@ -387,7 +380,7 @@ func (d *Diskv) ensurePath(key string) error {
 
 // completeFilename returns the absolute path to the file for the given key.
 func (d *Diskv) completeFilename(key string) string {
-	return fmt.Sprintf("%s%c%s", d.pathFor(key), os.PathSeparator, key)
+	return filepath.Join(d.pathFor(key), key)
 }
 
 // cacheWithLock attempts to cache the given key-value pair in the store's
@@ -400,13 +393,7 @@ func (d *Diskv) cacheWithLock(key string, val []byte) error {
 
 	// be very strict about memory guarantees
 	if (d.cacheSize + valueSize) > d.CacheSizeMax {
-		panic(
-			fmt.Sprintf(
-				"failed to make room for value (%d/%d)",
-				valueSize,
-				d.CacheSizeMax,
-			),
-		)
+		panic(fmt.Sprintf("failed to make room for value (%d/%d)", valueSize, d.CacheSizeMax))
 	}
 
 	d.cache[key] = val
@@ -426,8 +413,7 @@ func (d *Diskv) cacheWithoutLock(key string, val []byte) error {
 func (d *Diskv) pruneDirs(key string) error {
 	pathlist := d.Transform(key)
 	for i := range pathlist {
-		pslice := pathlist[:len(pathlist)-i]
-		dir := path.Join(d.BasePath, path.Join(pslice...))
+		dir := filepath.Join(d.BasePath, filepath.Join(pathlist[:len(pathlist)-i]...))
 
 		// thanks to Steven Blenkinsop for this snippet
 		switch fi, err := os.Stat(dir); true {
@@ -437,7 +423,7 @@ func (d *Diskv) pruneDirs(key string) error {
 			panic(fmt.Sprintf("corrupt dirstate at %s", dir))
 		}
 
-		nlinks, err := filepath.Glob(fmt.Sprintf("%s%c*", dir, os.PathSeparator))
+		nlinks, err := filepath.Glob(filepath.Join(dir, "*"))
 		if err != nil {
 			return err
 		} else if len(nlinks) > 0 {
@@ -455,27 +441,22 @@ func (d *Diskv) pruneDirs(key string) error {
 // the cache has at least valueSize bytes available.
 func (d *Diskv) ensureCacheSpaceFor(valueSize uint64) error {
 	if valueSize > d.CacheSizeMax {
-		return fmt.Errorf(
-			"value size (%d bytes) too large for cache (%d bytes)",
-			valueSize,
-			d.CacheSizeMax,
-		)
+		return fmt.Errorf("value size (%d bytes) too large for cache (%d bytes)", valueSize, d.CacheSizeMax)
 	}
 
 	safe := func() bool { return (d.cacheSize + valueSize) <= d.CacheSizeMax }
+
 	for key, val := range d.cache {
 		if safe() {
 			break
 		}
+
 		delete(d.cache, key)            // delete is safe, per spec
 		d.cacheSize -= uint64(len(val)) // len should return uint :|
 	}
+
 	if !safe() {
-		panic(fmt.Sprintf(
-			"%d bytes still won't fit in the cache! (max %d bytes)",
-			valueSize,
-			d.CacheSizeMax,
-		))
+		panic(fmt.Sprintf("%d bytes still won't fit in the cache! (max %d bytes)", valueSize, d.CacheSizeMax))
 	}
 
 	return nil
@@ -484,8 +465,8 @@ func (d *Diskv) ensureCacheSpaceFor(valueSize uint64) error {
 // nopWriteCloser wraps an io.Writer and provides a no-op Close method to
 // satisfy the io.WriteCloser interface.
 type nopWriteCloser struct {
-	w io.Writer
+	io.Writer
 }
 
-func (wc *nopWriteCloser) Write(p []byte) (int, error) { return wc.w.Write(p) }
+func (wc *nopWriteCloser) Write(p []byte) (int, error) { return wc.Writer.Write(p) }
 func (wc *nopWriteCloser) Close() error                { return nil }
