@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -344,12 +345,18 @@ func (d *Diskv) Has(key string) bool {
 	return true
 }
 
-// Keys returns a channel that will yield every key accessible by the store in
-// undefined order.
+// Keys returns a channel that will yield every key accessible by the store,
+// in undefined order.
 func (d *Diskv) Keys() <-chan string {
+	return d.KeysPrefix("")
+}
+
+// KeysPrefix returns a channel that will yield every key accessible by the
+// store with the given prefix, in undefined order.
+func (d *Diskv) KeysPrefix(prefix string) <-chan string {
 	c := make(chan string)
 	go func() {
-		filepath.Walk(d.BasePath, walker(c))
+		filepath.Walk(d.pathFor(prefix), walker(c, prefix))
 		close(c)
 	}()
 	return c
@@ -357,9 +364,9 @@ func (d *Diskv) Keys() <-chan string {
 
 // walker returns a function which satisfies the filepath.WalkFunc interface.
 // It sends every non-directory file entry down the channel c.
-func walker(c chan string) func(path string, info os.FileInfo, err error) error {
+func walker(c chan string, prefix string) func(path string, info os.FileInfo, err error) error {
 	return func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
+		if err == nil && !info.IsDir() && strings.HasPrefix(info.Name(), prefix) {
 			c <- info.Name()
 		}
 		return nil // "pass"
