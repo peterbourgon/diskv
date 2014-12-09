@@ -2,8 +2,10 @@ package diskv_test
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/peterbourgon/diskv"
 )
@@ -17,6 +19,7 @@ var (
 		"ef02gh05": "We believe strongly in the Unix philosophy",
 		"xxxxxxxx": "tools should be independently useful",
 	}
+
 	prefixes = []string{
 		"a",
 		"ab",
@@ -49,7 +52,7 @@ func TestKeysFlat(t *testing.T) {
 		d.Write(k, []byte(v))
 	}
 
-	checkKeys(t, d.Keys(), keysTestData)
+	checkKeys(t, d.Keys(nil), keysTestData)
 }
 
 func TestKeysNested(t *testing.T) {
@@ -63,7 +66,7 @@ func TestKeysNested(t *testing.T) {
 		d.Write(k, []byte(v))
 	}
 
-	checkKeys(t, d.Keys(), keysTestData)
+	checkKeys(t, d.Keys(nil), keysTestData)
 }
 
 func TestKeysPrefixFlat(t *testing.T) {
@@ -77,7 +80,7 @@ func TestKeysPrefixFlat(t *testing.T) {
 	}
 
 	for _, prefix := range prefixes {
-		checkKeys(t, d.KeysPrefix(prefix), filterPrefix(keysTestData, prefix))
+		checkKeys(t, d.KeysPrefix(prefix, nil), filterPrefix(keysTestData, prefix))
 	}
 }
 
@@ -93,7 +96,48 @@ func TestKeysPrefixNested(t *testing.T) {
 	}
 
 	for _, prefix := range prefixes {
-		checkKeys(t, d.KeysPrefix(prefix), filterPrefix(keysTestData, prefix))
+		checkKeys(t, d.KeysPrefix(prefix, nil), filterPrefix(keysTestData, prefix))
+	}
+}
+
+func TestKeysCancel(t *testing.T) {
+	d := diskv.New(diskv.Options{
+		BasePath: "test-data",
+	})
+	defer d.EraseAll()
+
+	for k, v := range keysTestData {
+		d.Write(k, []byte(v))
+	}
+
+	var (
+		cancel = make(chan struct{})
+		n      = len(keysTestData) / 2
+		count  int
+	)
+
+	keys := d.Keys(cancel)
+
+	for i := 0; i < n; i++ {
+		select {
+		case key := <-keys:
+			t.Logf("got expected key %q", key)
+			count++
+		case <-time.After(time.Millisecond):
+			t.Errorf("i=%d: expected a key, but didn't get one", i)
+		}
+	}
+
+	close(cancel)
+	runtime.Gosched()
+
+	for key := range keys {
+		t.Errorf("got a key (%q) from a canceled Keys channel", key)
+		count++
+	}
+
+	if want, have := n, count; want != have {
+		t.Errorf("want %d Key(s) in total, have %d", want, have)
 	}
 }
 
