@@ -49,7 +49,32 @@ func TestKeysFlat(t *testing.T) {
 		d.Write(k, []byte(v))
 	}
 
-	checkKeys(t, d.Keys(), keysTestData)
+	done := make(chan struct{})
+	defer close(done)
+	checkKeys(t, d.Keys(done), keysTestData)
+}
+
+func TestKeysDone(t *testing.T) {
+	d := diskv.New(diskv.Options{
+		BasePath: "test-data",
+	})
+	defer d.EraseAll()
+
+	for k, v := range keysTestData {
+		d.Write(k, []byte(v))
+	}
+
+	done := make(chan struct{})
+	i := 0
+	c := d.Keys(done)
+	close(done)
+	<-c
+	for _ = range d.Keys(done) {
+		i = i + 1
+	}
+	if i != 0 {
+		t.Errorf("Expected no further keys after cancel got %d", i)
+	}
 }
 
 func TestKeysNested(t *testing.T) {
@@ -63,7 +88,9 @@ func TestKeysNested(t *testing.T) {
 		d.Write(k, []byte(v))
 	}
 
-	checkKeys(t, d.Keys(), keysTestData)
+	done := make(chan struct{})
+	defer close(done)
+	checkKeys(t, d.Keys(done), keysTestData)
 }
 
 func TestKeysPrefixFlat(t *testing.T) {
@@ -76,8 +103,10 @@ func TestKeysPrefixFlat(t *testing.T) {
 		d.Write(k, []byte(v))
 	}
 
+	done := make(chan struct{})
+	defer close(done)
 	for _, prefix := range prefixes {
-		checkKeys(t, d.KeysPrefix(prefix), filterPrefix(keysTestData, prefix))
+		checkKeys(t, d.KeysPrefix(done, prefix), filterPrefix(keysTestData, prefix))
 	}
 }
 
@@ -92,8 +121,10 @@ func TestKeysPrefixNested(t *testing.T) {
 		d.Write(k, []byte(v))
 	}
 
+	done := make(chan struct{})
+	defer close(done)
 	for _, prefix := range prefixes {
-		checkKeys(t, d.KeysPrefix(prefix), filterPrefix(keysTestData, prefix))
+		checkKeys(t, d.KeysPrefix(done, prefix), filterPrefix(keysTestData, prefix))
 	}
 }
 
