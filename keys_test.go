@@ -5,7 +5,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/peterbourgon/diskv"
 )
@@ -111,33 +110,24 @@ func TestKeysCancel(t *testing.T) {
 	}
 
 	var (
-		cancel = make(chan struct{})
-		n      = len(keysTestData) / 2
-		count  int
+		cancel      = make(chan struct{})
+		received    = 0
+		cancelAfter = len(keysTestData) / 2
 	)
 
-	keys := d.Keys(cancel)
+	for key := range d.Keys(cancel) {
+		received++
 
-	for i := 0; i < n; i++ {
-		select {
-		case key := <-keys:
-			t.Logf("got expected key %q", key)
-			count++
-		case <-time.After(time.Millisecond):
-			t.Errorf("i=%d: expected a key, but didn't get one", i)
+		if received >= cancelAfter {
+			close(cancel)
+			runtime.Gosched() // allow walker to detect cancel
 		}
+
+		t.Logf("received %d: %q", received, key)
 	}
 
-	close(cancel)
-	runtime.Gosched()
-
-	for key := range keys {
-		t.Errorf("got a key (%q) from a canceled Keys channel", key)
-		count++
-	}
-
-	if want, have := n, count; want != have {
-		t.Errorf("want %d Key(s) in total, have %d", want, have)
+	if want, have := cancelAfter, received; want != have {
+		t.Errorf("want %d, have %d")
 	}
 }
 
