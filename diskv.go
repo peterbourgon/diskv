@@ -5,6 +5,7 @@ package diskv
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -22,6 +23,7 @@ const (
 
 var (
 	defaultTransform = func(s string) []string { return []string{} }
+	errCanceled      = errors.New("canceled")
 )
 
 // TransformFunction transforms a key into a slice of strings, with each
@@ -80,7 +82,7 @@ func New(o Options) *Diskv {
 	}
 
 	if d.Index != nil && d.IndexLess != nil {
-		d.Index.Initialize(d.IndexLess, d.Keys())
+		d.Index.Initialize(d.IndexLess, d.Keys(nil))
 	}
 
 	return d
@@ -176,8 +178,8 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 // If direct is true, ReadStream will always delete any cached value for the
 // key, and return a direct handle to the file on disk.
 //
-// ReadStream taps into the io.Reader stream prior to decompression, and
-// caches the compressed data.
+// If compression is enabled, ReadStream taps into the io.Reader stream prior
+// to decompression, and caches the compressed data.
 func (d *Diskv) ReadStream(key string, direct bool) (io.ReadCloser, error) {
 	d.RLock()
 	defer d.RUnlock()
@@ -339,17 +341,19 @@ func (d *Diskv) Has(key string) bool {
 }
 
 // Keys returns a channel that will yield every key accessible by the store,
-// in undefined order.
-func (d *Diskv) Keys() <-chan string {
-	return d.KeysPrefix("")
+// in undefined order. If a cancel channel is provided, closing it will
+// terminate and close the keys channel.
+func (d *Diskv) Keys(cancel <-chan struct{}) <-chan string {
+	return d.KeysPrefix("", cancel)
 }
 
 // KeysPrefix returns a channel that will yield every key accessible by the
-// store with the given prefix, in undefined order.
-func (d *Diskv) KeysPrefix(prefix string) <-chan string {
+// store with the given prefix, in undefined order. If a cancel channel is
+// provided, closing it will terminate and close the keys channel.
+func (d *Diskv) KeysPrefix(prefix string, cancel <-chan struct{}) <-chan string {
 	c := make(chan string)
 	go func() {
-		filepath.Walk(d.pathFor(prefix), walker(c, prefix))
+		filepath.Walk(d.pathFor(prefix), walker(c, prefix, cancel))
 		close(c)
 	}()
 	return c
@@ -357,12 +361,22 @@ func (d *Diskv) KeysPrefix(prefix string) <-chan string {
 
 // walker returns a function which satisfies the filepath.WalkFunc interface.
 // It sends every non-directory file entry down the channel c.
-func walker(c chan string, prefix string) func(path string, info os.FileInfo, err error) error {
+func walker(c chan<- string, prefix string, cancel <-chan struct{}) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.HasPrefix(info.Name(), prefix) {
-			c <- info.Name()
+		if err != nil {
+			return err
 		}
-		return nil // "pass"
+
+		if info.IsDir() || !strings.HasPrefix(info.Name(), prefix) {
+			return nil // "pass"
+		}
+
+		select {
+		case c <- info.Name():
+		case <-cancel:
+			return errCanceled
+		}
+		return nil
 	}
 }
 
