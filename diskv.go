@@ -5,6 +5,7 @@ package diskv
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -80,7 +81,7 @@ func New(o Options) *Diskv {
 	}
 
 	if d.Index != nil && d.IndexLess != nil {
-		d.Index.Initialize(d.IndexLess, d.Keys())
+		d.Index.Initialize(d.IndexLess, d.Keys(nil))
 	}
 
 	return d
@@ -338,18 +339,20 @@ func (d *Diskv) Has(key string) bool {
 	return true
 }
 
-// Keys returns a channel that will yield every key accessible by the store,
-// in undefined order.
-func (d *Diskv) Keys() <-chan string {
-	return d.KeysPrefix("")
+// Keys returns a channel that will yield every key accessible by the store, in
+// undefined order. If the caller wants to cancel the iteration it can close
+// done.
+func (d *Diskv) Keys(done <-chan struct{}) <-chan string {
+	return d.KeysPrefix(done, "")
 }
 
 // KeysPrefix returns a channel that will yield every key accessible by the
-// store with the given prefix, in undefined order.
-func (d *Diskv) KeysPrefix(prefix string) <-chan string {
+// store with the given prefix, in undefined order.  If the caller wants to
+// cancel the iteration it can close done.
+func (d *Diskv) KeysPrefix(done <-chan struct{}, prefix string) <-chan string {
 	c := make(chan string)
 	go func() {
-		filepath.Walk(d.pathFor(prefix), walker(c, prefix))
+		filepath.Walk(d.pathFor(prefix), walker(done, c, prefix))
 		close(c)
 	}()
 	return c
@@ -357,12 +360,20 @@ func (d *Diskv) KeysPrefix(prefix string) <-chan string {
 
 // walker returns a function which satisfies the filepath.WalkFunc interface.
 // It sends every non-directory file entry down the channel c.
-func walker(c chan string, prefix string) func(path string, info os.FileInfo, err error) error {
+func walker(done <-chan struct{}, c chan string, prefix string) func(path string, info os.FileInfo, err error) error {
 	return func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.HasPrefix(info.Name(), prefix) {
-			c <- info.Name()
+		if err != nil {
+			return err
 		}
-		return nil // "pass"
+		if info.IsDir() || !strings.HasPrefix(info.Name(), prefix) {
+			return nil // "pass"
+		}
+		select {
+		case c <- info.Name():
+		case <-done:
+			return errors.New("walk canceled")
+		}
+		return nil
 	}
 }
 

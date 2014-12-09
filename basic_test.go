@@ -95,7 +95,8 @@ func TestStrings(t *testing.T) {
 		}
 	}
 
-	for k := range d.Keys() {
+	done := make(chan struct{})
+	for k := range d.Keys(done) {
 		if _, present := keys[k]; present {
 			t.Logf("got: %s", k)
 			keys[k] = true
