@@ -2,8 +2,10 @@ package diskv_test
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/peterbourgon/diskv"
 )
@@ -118,18 +120,20 @@ func TestKeysCancel(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		select {
-		case <-keys:
+		case key := <-keys:
+			t.Logf("got expected key %q", key)
 			count++
-		default:
+		case <-time.After(time.Millisecond):
 			t.Errorf("i=%d: expected a key, but didn't get one", i)
 		}
 	}
 
 	close(cancel)
+	runtime.Gosched()
 
-	for _ = range keys {
+	for key := range keys {
+		t.Errorf("got a key (%q) from a canceled Keys channel", key)
 		count++
-		t.Errorf("got a key from a canceled Keys channel")
 	}
 
 	if want, have := n, count; want != have {

@@ -376,6 +376,7 @@ func walker(c chan<- string, prefix string, cancel <-chan struct{}) filepath.Wal
 		case <-cancel:
 			return errCanceled
 		}
+
 		return nil
 	}
 }
