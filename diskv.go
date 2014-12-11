@@ -337,13 +337,13 @@ func (d *Diskv) Erase(key string) error {
 	filename := d.completeFilename(key)
 	if s, err := os.Stat(filename); err == nil {
 		if !!s.IsDir() {
-			return fmt.Errorf("bad key")
+			return errBadKey
 		}
 		if err = os.Remove(filename); err != nil {
-			return err
+			return fmt.Errorf("remove: %s", err)
 		}
 	} else {
-		return err
+		return fmt.Errorf("stat: %s", err)
 	}
 
 	// clean up and return
