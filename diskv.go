@@ -22,8 +22,11 @@ const (
 )
 
 var (
-	defaultTransform = func(s string) []string { return []string{} }
-	errCanceled      = errors.New("canceled")
+	defaultTransform   = func(s string) []string { return []string{} }
+	errCanceled        = errors.New("canceled")
+	errEmptyKey        = errors.New("empty key")
+	errBadKey          = errors.New("bad key")
+	errImportDirectory = errors.New("can't import a directory")
 )
 
 // TransformFunction transforms a key into a slice of strings, with each
@@ -102,14 +105,18 @@ func (d *Diskv) Write(key string, val []byte) error {
 // bytes.Buffer provides io.Reader semantics for basic data types.
 func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 	if len(key) <= 0 {
-		return fmt.Errorf("empty key")
+		return errEmptyKey
 	}
-
-	// TODO use atomic FS ops in write()
 
 	d.Lock()
 	defer d.Unlock()
 
+	return d.writeStream(key, r, sync)
+}
+
+// writeStream does no input validation checking.
+// TODO: use atomic FS ops.
+func (d *Diskv) writeStream(key string, r io.Reader, sync bool) error {
 	if err := d.ensurePath(key); err != nil {
 		return fmt.Errorf("ensure path: %s", err)
 	}
@@ -155,6 +162,43 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 
 	delete(d.cache, key) // cache only on read
 	return nil
+}
+
+// Import will import the source file into diskv under the destination key. If
+// the destination key already exists, it will be overwritten.
+//
+// If move is true, diskv will perform a mv, which is zero-copy and atomic
+// provided the source file is on the same filesystem. If move is false,
+// Import invokes WriteStream, using the source file as the reader.
+func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
+	if dstKey == "" {
+		return errEmptyKey
+	}
+
+	if fi, err := os.Stat(srcFilename); err != nil {
+		return err
+	} else if fi.IsDir() {
+		return errImportDirectory
+	}
+
+	d.Lock()
+	defer d.Unlock()
+
+	if err := d.ensurePath(dstKey); err != nil {
+		return fmt.Errorf("ensure path: %s", err)
+	}
+
+	if move {
+		delete(d.cache, dstKey)
+		return os.Rename(srcFilename, d.completeFilename(dstKey))
+	}
+
+	f, err := os.Open(srcFilename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return d.writeStream(dstKey, f, false)
 }
 
 // Read reads the key and returns the value.
