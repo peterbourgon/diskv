@@ -27,6 +27,11 @@ func TestImportMove(t *testing.T) {
 	defer d.EraseAll()
 
 	key := "key"
+
+	if err := d.Write(key, []byte(`TBD`)); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := d.Import(f.Name(), key, true); err != nil {
 		t.Fatal(err)
 	}
@@ -61,20 +66,11 @@ func TestImportCopy(t *testing.T) {
 	})
 	defer d.EraseAll()
 
-	key := "key"
-	if err := d.Import(f.Name(), key, false); err != nil {
+	if err := d.Import(f.Name(), "key", false); err != nil {
 		t.Fatal(err)
 	}
 
 	if _, err := os.Stat(f.Name()); err != nil {
 		t.Errorf("expected temp file to remain, but got err = %v", err)
-	}
-
-	if !d.Has(key) {
-		t.Errorf("%q not present", key)
-	}
-
-	if buf, err := d.Read(key); err != nil || bytes.Compare(b, buf) != 0 {
-		t.Errorf("want %q, have %q (err = %v)", string(b), string(buf), err)
 	}
 }
