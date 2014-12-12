@@ -166,12 +166,9 @@ func (d *Diskv) writeStreamWithLock(key string, r io.Reader, sync bool) error {
 	return nil
 }
 
-// Import will import the source file into diskv under the destination key. If
-// the destination key already exists, it will be overwritten.
-//
-// If move is true, diskv will perform a mv, which is zero-copy and atomic
-// provided the source file is on the same filesystem. If move is false,
-// Import invokes WriteStream, using the source file as the reader.
+// Import imports the source file into diskv under the destination key. If the
+// destination key already exists, it's overwritten. If move is true, the
+// source file is removed after a successful import.
 func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 	if dstKey == "" {
 		return errEmptyKey
@@ -191,10 +188,11 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 	}
 
 	if move {
-		d.bustCacheWithLock(dstKey)
-		err := syscall.Rename(srcFilename, d.completeFilename(dstKey))
-		// If it failed due to being on a different device, fall back to copying
-		if err != syscall.EXDEV {
+		if err := syscall.Rename(srcFilename, d.completeFilename(dstKey)); err == nil {
+			d.bustCacheWithLock(dstKey)
+			return nil
+		} else if err != syscall.EXDEV {
+			// If it failed due to being on a different device, fall back to copying
 			return err
 		}
 	}
