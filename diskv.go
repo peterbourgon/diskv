@@ -236,22 +236,20 @@ func (d *Diskv) ReadStream(key string, direct bool) (io.ReadCloser, error) {
 	d.RLock()
 	defer d.RUnlock()
 
-	if d.CacheSizeMax > 0 {
-		if val, ok := d.cache[key]; ok {
-			if !direct {
-				buf := bytes.NewBuffer(val)
-				if d.Compression != nil {
-					return d.Compression.Reader(buf)
-				}
-				return ioutil.NopCloser(buf), nil
+	if val, ok := d.cache[key]; ok {
+		if !direct {
+			buf := bytes.NewBuffer(val)
+			if d.Compression != nil {
+				return d.Compression.Reader(buf)
 			}
-
-			go func() {
-				d.Lock()
-				defer d.Unlock()
-				d.uncacheWithLock(key, uint64(len(val)))
-			}()
+			return ioutil.NopCloser(buf), nil
 		}
+
+		go func() {
+			d.Lock()
+			defer d.Unlock()
+			d.uncacheWithLock(key, uint64(len(val)))
+		}()
 	}
 
 	return d.readWithRLock(key)
