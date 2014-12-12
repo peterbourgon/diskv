@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 const (
@@ -191,7 +192,11 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 
 	if move {
 		d.bustCacheWithLock(dstKey)
-		return os.Rename(srcFilename, d.completeFilename(dstKey))
+		err := syscall.Rename(srcFilename, d.completeFilename(dstKey))
+		// If it failed due to being on a different device, fall back to copying
+		if err != syscall.EXDEV {
+			return err
+		}
 	}
 
 	f, err := os.Open(srcFilename)
@@ -199,7 +204,11 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 		return err
 	}
 	defer f.Close()
-	return d.writeStreamWithLock(dstKey, f, false)
+	err = d.writeStreamWithLock(dstKey, f, false)
+	if err == nil && move {
+		err = os.Remove(srcFilename)
+	}
+	return err
 }
 
 // Read reads the key and returns the value.
