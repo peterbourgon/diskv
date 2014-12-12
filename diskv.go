@@ -299,7 +299,7 @@ type closingReader struct {
 	rc io.ReadCloser
 }
 
-func (cr *closingReader) Read(p []byte) (int, error) {
+func (cr closingReader) Read(p []byte) (int, error) {
 	n, err := cr.rc.Read(p)
 	if err == io.EOF {
 		if closeErr := cr.rc.Close(); closeErr != nil {
