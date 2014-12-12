@@ -220,7 +220,7 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 // ReadStream will use the cached value. Otherwise, it will return a handle to
 // the file on disk, and cache the data on read.
 //
-// If direct is true, ReadStream will always delete any cached value for the
+// If direct is true, ReadStream will lazily delete any cached value for the
 // key, and return a direct handle to the file on disk.
 //
 // If compression is enabled, ReadStream taps into the io.Reader stream prior
@@ -238,7 +238,11 @@ func (d *Diskv) ReadStream(key string, direct bool) (io.ReadCloser, error) {
 			return ioutil.NopCloser(buf), nil
 		}
 
-		d.uncacheWithLock(key, uint64(len(val)))
+		go func() {
+			d.Lock()
+			defer d.Unlock()
+			d.uncacheWithLock(key, uint64(len(val)))
+		}()
 	}
 
 	return d.readWithRLock(key)
