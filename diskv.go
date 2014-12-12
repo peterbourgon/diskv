@@ -111,13 +111,13 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 	d.Lock()
 	defer d.Unlock()
 
-	return d.writeStream(key, r, sync)
+	return d.writeStreamWithLock(key, r, sync)
 }
 
 // writeStream does no input validation checking.
 // TODO: use atomic FS ops.
-func (d *Diskv) writeStream(key string, r io.Reader, sync bool) error {
-	if err := d.ensurePath(key); err != nil {
+func (d *Diskv) writeStreamWithLock(key string, r io.Reader, sync bool) error {
+	if err := d.ensurePathWithLock(key); err != nil {
 		return fmt.Errorf("ensure path: %s", err)
 	}
 
@@ -160,7 +160,8 @@ func (d *Diskv) writeStream(key string, r io.Reader, sync bool) error {
 		d.Index.Insert(key)
 	}
 
-	delete(d.cache, key) // cache only on read
+	d.bustCacheWithLock(key) // cache only on read
+
 	return nil
 }
 
@@ -184,12 +185,12 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 	d.Lock()
 	defer d.Unlock()
 
-	if err := d.ensurePath(dstKey); err != nil {
+	if err := d.ensurePathWithLock(dstKey); err != nil {
 		return fmt.Errorf("ensure path: %s", err)
 	}
 
 	if move {
-		delete(d.cache, dstKey)
+		d.bustCacheWithLock(dstKey)
 		return os.Rename(srcFilename, d.completeFilename(dstKey))
 	}
 
@@ -198,7 +199,7 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 		return err
 	}
 	defer f.Close()
-	return d.writeStream(dstKey, f, false)
+	return d.writeStreamWithLock(dstKey, f, false)
 }
 
 // Read reads the key and returns the value.
@@ -229,26 +230,25 @@ func (d *Diskv) ReadStream(key string, direct bool) (io.ReadCloser, error) {
 	defer d.RUnlock()
 
 	if val, ok := d.cache[key]; ok {
-		if direct {
-			d.cacheSize -= uint64(len(val))
-			delete(d.cache, key)
-		} else {
+		if !direct {
 			buf := bytes.NewBuffer(val)
 			if d.Compression != nil {
 				return d.Compression.Reader(buf)
 			}
 			return ioutil.NopCloser(buf), nil
 		}
+
+		d.uncacheWithLock(key, uint64(len(val)))
 	}
 
-	return d.read(key)
+	return d.readWithRLock(key)
 }
 
 // read ignores the cache, and returns an io.ReadCloser representing the
 // decompressed data for the given key, streamed from the disk. Clients should
 // acquire a read lock on the Diskv and check the cache themselves before
 // calling read.
-func (d *Diskv) read(key string) (io.ReadCloser, error) {
+func (d *Diskv) readWithRLock(key string) (io.ReadCloser, error) {
 	filename := d.completeFilename(key)
 
 	fi, err := os.Stat(filename)
@@ -322,11 +322,7 @@ func (d *Diskv) Erase(key string) error {
 	d.Lock()
 	defer d.Unlock()
 
-	// erase from cache
-	if val, ok := d.cache[key]; ok {
-		d.cacheSize -= uint64(len(val))
-		delete(d.cache, key)
-	}
+	d.bustCacheWithLock(key)
 
 	// erase from index
 	if d.Index != nil {
@@ -347,7 +343,7 @@ func (d *Diskv) Erase(key string) error {
 	}
 
 	// clean up and return
-	d.pruneDirs(key)
+	d.pruneDirsWithLock(key)
 	return nil
 }
 
@@ -431,9 +427,9 @@ func (d *Diskv) pathFor(key string) string {
 	return filepath.Join(d.BasePath, filepath.Join(d.Transform(key)...))
 }
 
-// ensureDir is a helper function that generates all necessary directories on
-// the filesystem for the given key.
-func (d *Diskv) ensurePath(key string) error {
+// ensurePathWithLock is a helper function that generates all necessary
+// directories on the filesystem for the given key.
+func (d *Diskv) ensurePathWithLock(key string) error {
 	return os.MkdirAll(d.pathFor(key), d.PathPerm)
 }
 
@@ -446,7 +442,7 @@ func (d *Diskv) completeFilename(key string) string {
 // cache. It can fail if the value is larger than the cache's maximum size.
 func (d *Diskv) cacheWithLock(key string, val []byte) error {
 	valueSize := uint64(len(val))
-	if err := d.ensureCacheSpaceFor(valueSize); err != nil {
+	if err := d.ensureCacheSpaceWithLock(valueSize); err != nil {
 		return fmt.Errorf("%s; not caching", err)
 	}
 
@@ -467,9 +463,20 @@ func (d *Diskv) cacheWithoutLock(key string, val []byte) error {
 	return d.cacheWithLock(key, val)
 }
 
-// pruneDirs deletes empty directories in the path walk leading to the key k.
-// Typically this function is called after an Erase is made.
-func (d *Diskv) pruneDirs(key string) error {
+func (d *Diskv) bustCacheWithLock(key string) {
+	if val, ok := d.cache[key]; ok {
+		d.uncacheWithLock(key, uint64(len(val)))
+	}
+}
+
+func (d *Diskv) uncacheWithLock(key string, sz uint64) {
+	d.cacheSize -= sz
+	delete(d.cache, key)
+}
+
+// pruneDirsWithLock deletes empty directories in the path walk leading to the
+// key k. Typically this function is called after an Erase is made.
+func (d *Diskv) pruneDirsWithLock(key string) error {
 	pathlist := d.Transform(key)
 	for i := range pathlist {
 		dir := filepath.Join(d.BasePath, filepath.Join(pathlist[:len(pathlist)-i]...))
@@ -496,9 +503,9 @@ func (d *Diskv) pruneDirs(key string) error {
 	return nil
 }
 
-// ensureCacheSpaceFor deletes entries from the cache in arbitrary order until
-// the cache has at least valueSize bytes available.
-func (d *Diskv) ensureCacheSpaceFor(valueSize uint64) error {
+// ensureCacheSpaceWithLock deletes entries from the cache in arbitrary order
+// until the cache has at least valueSize bytes available.
+func (d *Diskv) ensureCacheSpaceWithLock(valueSize uint64) error {
 	if valueSize > d.CacheSizeMax {
 		return fmt.Errorf("value size (%d bytes) too large for cache (%d bytes)", valueSize, d.CacheSizeMax)
 	}
@@ -510,8 +517,7 @@ func (d *Diskv) ensureCacheSpaceFor(valueSize uint64) error {
 			break
 		}
 
-		delete(d.cache, key)            // delete is safe, per spec
-		d.cacheSize -= uint64(len(val)) // len should return uint :|
+		d.uncacheWithLock(key, uint64(len(val)))
 	}
 
 	if !safe() {
