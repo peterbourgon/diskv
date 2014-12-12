@@ -393,11 +393,18 @@ func (d *Diskv) Keys(cancel <-chan struct{}) <-chan string {
 
 // KeysPrefix returns a channel that will yield every key accessible by the
 // store with the given prefix, in undefined order. If a cancel channel is
-// provided, closing it will terminate and close the keys channel.
+// provided, closing it will terminate and close the keys channel. If the
+// provided prefix is the empty string, all keys will be yielded.
 func (d *Diskv) KeysPrefix(prefix string, cancel <-chan struct{}) <-chan string {
+	var prepath string
+	if prefix == "" {
+		prepath = d.BasePath
+	} else {
+		prepath = d.pathFor(prefix)
+	}
 	c := make(chan string)
 	go func() {
-		filepath.Walk(d.pathFor(prefix), walker(c, prefix, cancel))
+		filepath.Walk(prepath, walker(c, prefix, cancel))
 		close(c)
 	}()
 	return c

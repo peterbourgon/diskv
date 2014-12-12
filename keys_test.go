@@ -20,6 +20,7 @@ var (
 	}
 
 	prefixes = []string{
+		"", // all
 		"a",
 		"ab",
 		"ab0",
@@ -42,8 +43,15 @@ var (
 )
 
 func TestKeysFlat(t *testing.T) {
+	transform := func(s string) []string {
+		if s == "" {
+			t.Fatalf(`transform should not be called with ""`)
+		}
+		return []string{}
+	}
 	d := diskv.New(diskv.Options{
-		BasePath: "test-data",
+		BasePath:  "test-data",
+		Transform: transform,
 	})
 	defer d.EraseAll()
 
