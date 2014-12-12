@@ -236,20 +236,22 @@ func (d *Diskv) ReadStream(key string, direct bool) (io.ReadCloser, error) {
 	d.RLock()
 	defer d.RUnlock()
 
-	if val, ok := d.cache[key]; ok {
-		if !direct {
-			buf := bytes.NewBuffer(val)
-			if d.Compression != nil {
-				return d.Compression.Reader(buf)
+	if d.CacheSizeMax > 0 {
+		if val, ok := d.cache[key]; ok {
+			if !direct {
+				buf := bytes.NewBuffer(val)
+				if d.Compression != nil {
+					return d.Compression.Reader(buf)
+				}
+				return ioutil.NopCloser(buf), nil
 			}
-			return ioutil.NopCloser(buf), nil
-		}
 
-		go func() {
-			d.Lock()
-			defer d.Unlock()
-			d.uncacheWithLock(key, uint64(len(val)))
-		}()
+			go func() {
+				d.Lock()
+				defer d.Unlock()
+				d.uncacheWithLock(key, uint64(len(val)))
+			}()
+		}
 	}
 
 	return d.readWithRLock(key)
@@ -275,7 +277,12 @@ func (d *Diskv) readWithRLock(key string) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	r := newSiphon(f, d, key)
+	var r io.Reader
+	if d.CacheSizeMax > 0 {
+		r = newSiphon(f, d, key)
+	} else {
+		r = &closingReader{f}
+	}
 
 	var rc = io.ReadCloser(ioutil.NopCloser(r))
 	if d.Compression != nil {
@@ -286,6 +293,22 @@ func (d *Diskv) readWithRLock(key string) (io.ReadCloser, error) {
 	}
 
 	return rc, nil
+}
+
+// closingReader provides a Reader that automatically closes the
+// embedded ReadCloser when it reaches EOF
+type closingReader struct {
+	rc io.ReadCloser
+}
+
+func (cr *closingReader) Read(p []byte) (int, error) {
+	n, err := cr.rc.Read(p)
+	if err == io.EOF {
+		if closeErr := cr.rc.Close(); closeErr != nil {
+			return n, closeErr // close must succeed for Read to succeed
+		}
+	}
+	return n, err
 }
 
 // siphon is like a TeeReader: it copies all data read through it to an
