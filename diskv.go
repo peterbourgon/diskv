@@ -143,6 +143,7 @@ func (d *Diskv) writeStreamWithLock(key string, r io.Reader, sync bool) error {
 	}
 
 	if err := wc.Close(); err != nil {
+		f.Close() // error deliberately ignored
 		return fmt.Errorf("compression close: %s", err)
 	}
 
