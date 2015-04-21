@@ -365,14 +365,15 @@ func (d *Diskv) Erase(key string) error {
 	// erase from disk
 	filename := d.completeFilename(key)
 	if s, err := os.Stat(filename); err == nil {
-		if !!s.IsDir() {
+		if s.IsDir() {
 			return errBadKey
 		}
 		if err = os.Remove(filename); err != nil {
-			return fmt.Errorf("remove: %s", err)
+			return err
 		}
 	} else {
-		return fmt.Errorf("stat: %s", err)
+		// Return err as-is so caller can do os.IsNotExist(err).
+		return err
 	}
 
 	// clean up and return
