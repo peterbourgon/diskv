@@ -19,8 +19,8 @@ func cmpBytes(a, b []byte) bool {
 }
 
 func (d *Diskv) isCached(key string) bool {
-	d.RLock()
-	defer d.RUnlock()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	_, ok := d.cache[key]
 	return ok
 }
