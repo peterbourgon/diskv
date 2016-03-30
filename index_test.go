@@ -2,6 +2,7 @@ package diskv
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func TestIndexOrder(t *testing.T) {
 		BasePath:     "index-test",
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
-		Index:        &LLRBIndex{},
+		Index:        &BTreeIndex{},
 		IndexLess:    strLess,
 	})
 	defer d.EraseAll()
@@ -82,7 +83,7 @@ func TestIndexLoad(t *testing.T) {
 		BasePath:     "index-test",
 		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
-		Index:        &LLRBIndex{},
+		Index:        &BTreeIndex{},
 		IndexLess:    strLess,
 	})
 	defer d2.EraseAll()
@@ -122,5 +123,26 @@ func TestIndexLoad(t *testing.T) {
 	// but not in the original
 	if _, err := d1.Read(keys[0]); err == nil {
 		t.Fatalf("expected error reading from flushed store")
+	}
+}
+
+func TestIndexKeysEmptyFrom(t *testing.T) {
+	d := New(Options{
+		BasePath:     "index-test",
+		Transform:    func(string) []string { return []string{} },
+		CacheSizeMax: 1024,
+		Index:        &BTreeIndex{},
+		IndexLess:    strLess,
+	})
+	defer d.EraseAll()
+
+	for _, k := range []string{"a", "c", "z", "b", "x", "b", "y"} {
+		d.Write(k, []byte("1"))
+	}
+
+	want := []string{"a", "b", "c", "x", "y", "z"}
+	have := d.Index.Keys("", 99)
+	if !reflect.DeepEqual(want, have) {
+		t.Errorf("want %v, have %v", want, have)
 	}
 }
