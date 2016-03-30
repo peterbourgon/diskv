@@ -70,7 +70,7 @@ func benchWrite(b *testing.B, size int, withIndex bool) {
 		CacheSizeMax: 0,
 	}
 	if withIndex {
-		options.Index = &LLRBIndex{}
+		options.Index = &BTreeIndex{}
 		options.IndexLess = strLess
 	}
 
