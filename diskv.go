@@ -223,6 +223,38 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 	return ioutil.ReadAll(rc)
 }
 
+// Move atomically moves a value from one key to another, overwriting any
+// existing value at the destination key.
+// If the value is in cache, the key will be moved in the cache too.
+func (d *Diskv) Move(src, dst string) error {
+	d.Lock()
+	defer d.Unlock()
+
+	srcfn := d.completeFilename(src)
+	fi, err := os.Stat(srcfn)
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		return os.ErrNotExist
+	}
+
+	dstfn := d.completeFilename(dst)
+	if err := d.ensurePath(dst); err != nil {
+		return fmt.Errorf("ensure path: %s", err)
+	}
+
+	if err := os.Rename(srcfn, dstfn); err != nil {
+		return err
+	}
+
+	if _, ok := d.cache[src]; ok {
+		d.cache[dst] = d.cache[src]
+		delete(d.cache, src)
+	}
+	return nil
+}
+
 // ReadStream reads the key and returns the value (data) as an io.ReadCloser.
 // If the value is cached from a previous read, and direct is false,
 // ReadStream will use the cached value. Otherwise, it will return a handle to
