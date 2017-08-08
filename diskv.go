@@ -116,46 +116,59 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 }
 
 // writeStream does no input validation checking.
-// TODO: use atomic FS ops.
 func (d *Diskv) writeStreamWithLock(key string, r io.Reader, sync bool) error {
 	if err := d.ensurePathWithLock(key); err != nil {
 		return fmt.Errorf("ensure path: %s", err)
 	}
 
-	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists
-	f, err := os.OpenFile(d.completeFilename(key), mode, d.FilePerm)
+	f, err := ioutil.TempFile(d.pathFor(key), fmt.Sprintf("temp-%s-", key))
 	if err != nil {
-		return fmt.Errorf("open file: %s", err)
+		return fmt.Errorf("temp file: %s", err)
+	}
+
+	if err := f.Chmod(d.FilePerm); err != nil {
+		f.Close()           // error deliberately ignored
+		os.Remove(f.Name()) // error deliberately ignored
+		return fmt.Errorf("chmod: %s", err)
 	}
 
 	wc := io.WriteCloser(&nopWriteCloser{f})
 	if d.Compression != nil {
 		wc, err = d.Compression.Writer(f)
 		if err != nil {
-			f.Close() // error deliberately ignored
+			f.Close()           // error deliberately ignored
+			os.Remove(f.Name()) // error deliberately ignored
 			return fmt.Errorf("compression writer: %s", err)
 		}
 	}
 
 	if _, err := io.Copy(wc, r); err != nil {
-		f.Close() // error deliberately ignored
+		f.Close()           // error deliberately ignored
+		os.Remove(f.Name()) // error deliberately ignored
 		return fmt.Errorf("i/o copy: %s", err)
 	}
 
 	if err := wc.Close(); err != nil {
-		f.Close() // error deliberately ignored
+		f.Close()           // error deliberately ignored
+		os.Remove(f.Name()) // error deliberately ignored
 		return fmt.Errorf("compression close: %s", err)
 	}
 
 	if sync {
 		if err := f.Sync(); err != nil {
-			f.Close() // error deliberately ignored
+			f.Close()           // error deliberately ignored
+			os.Remove(f.Name()) // error deliberately ignored
 			return fmt.Errorf("file sync: %s", err)
 		}
 	}
 
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("file close: %s", err)
+	}
+
+	if err := os.Rename(f.Name(), d.completeFilename(key)); err != nil {
+		os.Remove(f.Name()) // error deliberately ignored
+		return fmt.Errorf("rename: %s", err)
 	}
 
 	if d.Index != nil {
