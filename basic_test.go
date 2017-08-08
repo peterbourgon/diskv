@@ -2,6 +2,7 @@ package diskv
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 )
@@ -249,5 +250,30 @@ func TestHas(t *testing.T) {
 		if expected, got := tuple.expected, d.Has(tuple.key); expected != got {
 			t.Errorf("Has(%s): expected %v, got %v", tuple.key, expected, got)
 		}
+	}
+}
+
+type BrokenReader struct{}
+
+func (BrokenReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("failed to read")
+}
+
+func TestAtomicWrite(t *testing.T) {
+	opts := Options{
+		BasePath:     "test-data",
+		CacheSizeMax: 1024,
+	}
+	d := New(opts)
+	defer d.EraseAll()
+
+	key, stream, sync := "key", BrokenReader{}, false
+
+	if err := d.WriteStream(key, stream, sync); err == nil {
+		t.Fatalf("Expected i/o copy error, none received.")
+	}
+
+	if _, err := d.Read(key); err == nil {
+		t.Fatal("Could read the key, but it shouldn't exist")
 	}
 }
