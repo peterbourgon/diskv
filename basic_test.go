@@ -259,7 +259,7 @@ func (BrokenReader) Read(p []byte) (n int, err error) {
 	return 0, errors.New("failed to read")
 }
 
-func TestAtomicWrite(t *testing.T) {
+func TestRemovesIncompleteFiles(t *testing.T) {
 	opts := Options{
 		BasePath:     "test-data",
 		CacheSizeMax: 1024,
@@ -275,5 +275,62 @@ func TestAtomicWrite(t *testing.T) {
 
 	if _, err := d.Read(key); err == nil {
 		t.Fatal("Could read the key, but it shouldn't exist")
+	}
+}
+
+func TestTempDir(t *testing.T) {
+	opts := Options{
+		BasePath:     "test-data",
+		TempDir:      "test-data-temp",
+		CacheSizeMax: 1024,
+	}
+	d := New(opts)
+	defer d.EraseAll()
+
+	k, v := "a", []byte{'b'}
+	if err := d.Write(k, v); err != nil {
+		t.Fatalf("write: %s", err)
+	}
+	if readVal, err := d.Read(k); err != nil {
+		t.Fatalf("read: %s", err)
+	} else if bytes.Compare(v, readVal) != 0 {
+		t.Fatalf("read: expected %s, got %s", v, readVal)
+	}
+	if err := d.Erase(k); err != nil {
+		t.Fatalf("erase: %s", err)
+	}
+}
+
+type CrashingReader struct{}
+
+func (CrashingReader) Read(p []byte) (n int, err error) {
+	panic("System has crashed while reading the stream")
+}
+
+func TestAtomicWrite(t *testing.T) {
+	opts := Options{
+		BasePath: "test-data",
+		// Test would fail if TempDir is not set here.
+		TempDir:      "test-data-temp",
+		CacheSizeMax: 1024,
+	}
+	d := New(opts)
+	defer d.EraseAll()
+
+	key := "key"
+	func() {
+		defer func() {
+			recover() // Ignore panicking error
+		}()
+
+		stream := CrashingReader{}
+		d.WriteStream(key, stream, false)
+	}()
+
+	if d.Has(key) {
+		t.Fatal("Has key, but it shouldn't exist")
+	}
+	if _, ok := <-d.Keys(nil); ok {
+		t.Fatal("Store isn't empty")
 	}
 }
