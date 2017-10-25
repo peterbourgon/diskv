@@ -115,6 +115,11 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 		return errEmptyKey
 	}
 
+	// Ensure keys cannot evaluate to paths that would not exist
+	if strings.ContainsRune(key, os.PathSeparator) {
+		return errBadKey
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
