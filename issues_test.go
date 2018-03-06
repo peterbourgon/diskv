@@ -55,10 +55,9 @@ func TestIssue2B(t *testing.T) {
 	}
 
 	d := New(Options{
-		BasePath:         "test-issue-2b",
-		Transform:        SimpleTransform(blockTransform),
-		InverseTransform: defaultInverseTransform,
-		CacheSizeMax:     0,
+		BasePath:     "test-issue-2b",
+		Transform:    blockTransform,
+		CacheSizeMax: 0,
 	})
 	defer d.EraseAll()
 

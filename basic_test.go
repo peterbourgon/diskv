@@ -338,8 +338,18 @@ func TestAtomicWrite(t *testing.T) {
 	}
 }
 
+const letterBytes = "abcdef0123456789"
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
 func TestHybridStore(t *testing.T) {
-	var regex *regexp.Regexp = regexp.MustCompile("[0-9a-fA-F]{64}")
+	regex := regexp.MustCompile("[0-9a-fA-F]{64}")
 
 	transformFunc := func(s string) *PathKey {
 
@@ -377,10 +387,10 @@ func TestHybridStore(t *testing.T) {
 
 	}
 	opts := Options{
-		BasePath:         "test-data",
-		CacheSizeMax:     1024,
-		Transform:        transformFunc,
-		InverseTransform: inverseTransformFunc,
+		BasePath:          "test-data",
+		CacheSizeMax:      1024,
+		AdvancedTransform: transformFunc,
+		InverseTransform:  inverseTransformFunc,
 	}
 	d := New(opts)
 	defer d.EraseAll()
@@ -405,14 +415,16 @@ func TestHybridStore(t *testing.T) {
 		testData[key] = RandStringBytes(100)
 	}
 
-}
-
-const letterBytes = "abcdef0123456789"
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	for k, v := range testData {
+		d.WriteString(k, v)
 	}
-	return string(b)
+
+	for k, v := range testData {
+		readVal := d.ReadString(k)
+
+		if v != readVal {
+			t.Fatalf("read: expected %s, got %s", v, readVal)
+		}
+	}
+
 }

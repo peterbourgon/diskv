@@ -48,9 +48,8 @@ func TestKeysFlat(t *testing.T) {
 		return []string{}
 	}
 	d := New(Options{
-		BasePath:         "test-data",
-		Transform:        SimpleTransform(transform),
-		InverseTransform: defaultInverseTransform,
+		BasePath:  "test-data",
+		Transform: transform,
 	})
 	defer d.EraseAll()
 
@@ -63,9 +62,8 @@ func TestKeysFlat(t *testing.T) {
 
 func TestKeysNested(t *testing.T) {
 	d := New(Options{
-		BasePath:         "test-data",
-		Transform:        SimpleTransform(blockTransform(2)),
-		InverseTransform: defaultInverseTransform,
+		BasePath:  "test-data",
+		Transform: blockTransform(2),
 	})
 	defer d.EraseAll()
 
@@ -93,9 +91,8 @@ func TestKeysPrefixFlat(t *testing.T) {
 
 func TestKeysPrefixNested(t *testing.T) {
 	d := New(Options{
-		BasePath:         "test-data",
-		Transform:        SimpleTransform(blockTransform(2)),
-		InverseTransform: defaultInverseTransform,
+		BasePath:  "test-data",
+		Transform: blockTransform(2),
 	})
 	defer d.EraseAll()
 

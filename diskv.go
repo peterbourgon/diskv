@@ -29,12 +29,12 @@ type PathKey struct {
 }
 
 var (
-	defaultTransform        = func(s string) *PathKey { return &PathKey{Path: []string{}, FileName: s} }
-	defaultInverseTransform = func(pathKey *PathKey) string { return pathKey.FileName }
-	errCanceled             = errors.New("canceled")
-	errEmptyKey             = errors.New("empty key")
-	errBadKey               = errors.New("bad key")
-	errImportDirectory      = errors.New("can't import a directory")
+	defaultAdvancedTransform = func(s string) *PathKey { return &PathKey{Path: []string{}, FileName: s} }
+	defaultInverseTransform  = func(pathKey *PathKey) string { return pathKey.FileName }
+	errCanceled              = errors.New("canceled")
+	errEmptyKey              = errors.New("empty key")
+	errBadKey                = errors.New("bad key")
+	errImportDirectory       = errors.New("can't import a directory")
 )
 
 // TransformFunction transforms a key into a slice of strings, with each
@@ -43,19 +43,40 @@ var (
 //
 // For example, if TransformFunc transforms "abcdef" to ["ab", "cde", "f"],
 // the final location of the data file will be <basedir>/ab/cde/f/abcdef
-type TransformFunction func(s string) *PathKey
+type TransformFunction func(s string) []string
+
+// AdvancedTransformFunction transforms a key into:
+// * A slice of strings, (Path) with each element in the slice
+// representing a directory in the file path where the
+// key's entry will eventually be stored.
+//
+// and:
+//
+// * the file name
+//
+// For example, if TransformFunc transforms "abcdef/file.txt" to Path=["ab", "cde", "f"],
+// and FileName="file.txt"
+// the final location of the data file will be <basedir>/ab/cde/f/file.txt
+//
+// You must provide an InverseTransformFunction if you use this
+//
+type AdvancedTransformFunction func(s string) *PathKey
+
+// InverseTransformFunction takes a Path+Filename and
+// converts it back to a key
 
 type InverseTransformFunction func(pathKey *PathKey) string
 
 // Options define a set of properties that dictate Diskv behavior.
 // All values are optional.
 type Options struct {
-	BasePath         string
-	Transform        TransformFunction
-	InverseTransform InverseTransformFunction
-	CacheSizeMax     uint64 // bytes
-	PathPerm         os.FileMode
-	FilePerm         os.FileMode
+	BasePath          string
+	Transform         TransformFunction
+	AdvancedTransform AdvancedTransformFunction
+	InverseTransform  InverseTransformFunction
+	CacheSizeMax      uint64 // bytes
+	PathPerm          os.FileMode
+	FilePerm          os.FileMode
 	// If TempDir is set, it will enable filesystem atomic writes by
 	// writing temporary files to that location before being moved
 	// to BasePath.
@@ -85,13 +106,18 @@ func New(o Options) *Diskv {
 	if o.BasePath == "" {
 		o.BasePath = defaultBasePath
 	}
-	if o.Transform == nil {
-		o.Transform = defaultTransform
-		o.InverseTransform = defaultInverseTransform
-	}
 
-	if o.InverseTransform == nil {
-		panic("You must provide an InverseTransform function")
+	if o.AdvancedTransform == nil {
+		if o.Transform == nil {
+			o.AdvancedTransform = defaultAdvancedTransform
+		} else {
+			o.AdvancedTransform = convertToSimpleTransform(o.Transform)
+		}
+		o.InverseTransform = defaultInverseTransform
+	} else {
+		if o.InverseTransform == nil {
+			panic("You must provide an InverseTransform function in advanced mode")
+		}
 	}
 
 	if o.PathPerm == 0 {
@@ -114,7 +140,9 @@ func New(o Options) *Diskv {
 	return d
 }
 
-func SimpleTransform(oldFunc func(s string) []string) TransformFunction {
+// convertToSimpleTransform takes a classic Transform function and
+// converts it to the new AdvancedTransform
+func convertToSimpleTransform(oldFunc func(s string) []string) AdvancedTransformFunction {
 	return func(s string) *PathKey {
 		return &PathKey{Path: oldFunc(s), FileName: s}
 	}
@@ -127,8 +155,13 @@ func (d *Diskv) Write(key string, val []byte) error {
 	return d.WriteStream(key, bytes.NewReader(val), false)
 }
 
+// WriteString writes a string key-value pair to disk
+func (d *Diskv) WriteString(key string, val string) error {
+	return d.Write(key, []byte(val))
+}
+
 func (d *Diskv) transform(key string) (pathKey *PathKey) {
-	pathKey = d.Transform(key)
+	pathKey = d.AdvancedTransform(key)
 	pathKey.originalKey = key
 	return
 }
@@ -309,6 +342,13 @@ func (d *Diskv) Read(key string) ([]byte, error) {
 	}
 	defer rc.Close()
 	return ioutil.ReadAll(rc)
+}
+
+// ReadString reads the key and returns a string value
+// In case of error, an empty string is returned
+func (d *Diskv) ReadString(key string) string {
+	value, _ := d.Read(key)
+	return string(value)
 }
 
 // ReadStream reads the key and returns the value (data) as an io.ReadCloser.
