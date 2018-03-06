@@ -595,18 +595,6 @@ func (d *Diskv) walker(c chan<- string, prefix string, cancel <-chan struct{}) f
 			Path:     pathSplit,
 			FileName: file,
 		}
-		/* 		if info.IsDir() {
-		   			pathKey = &PathKey{
-		   				Path:     pathSplit,
-		   				FileName: "",
-		   			}
-		   		} else {
-
-		   			pathKey = &PathKey{
-		   				Path:     pathSplit,
-		   				FileName: file,
-		   			}
-				   } */
 
 		key := d.InverseTransform(pathKey)
 
