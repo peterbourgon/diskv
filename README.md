@@ -112,40 +112,41 @@ a special PathKey structure, which is a breakdown of a path and a file name. Str
 returned must be clean of any slashes or special characters:
 
 ```go
-func AdvancedTransformExample (key string) *diskv.PathKey {
-	path := strings.Split(key,"/")
-	last := len(path)-1
+func AdvancedTransformExample(key string) *diskv.PathKey {
+	path := strings.Split(key, "/")
+	last := len(path) - 1
 	return &diskv.PathKey{
-		Path: path[:last],
-		FileName: path[last] + ".txt"
+		Path:     path[:last],
+		FileName: path[last] + ".txt",
 	}
 }
 
 // If you provide an AdvancedTransform, you must also provide its
 // inverse:
 
-func InverseTransformExample (pathKey *diskv.PathKey) (key string){
-	txt := pathKey.FileName[len(pathKey.FileName-4):]
+func InverseTransformExample(pathKey *diskv.PathKey) (key string) {
+	txt := pathKey.FileName[len(pathKey.FileName)-4:]
 	if txt != ".txt" {
 		panic("Invalid file found in storage folder!")
 	}
-	key = strings.Join(pathKey.Path, "/") + pathKey.FileName[:len(pathKey.FileName-4)]
+	key = strings.Join(pathKey.Path, "/") + pathKey.FileName[:len(pathKey.FileName)-4]
 	return
 }
 
 func main() {
 
 	d := diskv.New(diskv.Options{
-		BasePath:     "my-data-dir",
-		AdvancedTransform:    AdvancedTransformExample,
-		InverseTransform: InverseTransformExample,
-		CacheSizeMax: 1024 * 1024,
+		BasePath:          "my-data-dir",
+		AdvancedTransform: AdvancedTransformExample,
+		InverseTransform:  InverseTransformExample,
+		CacheSizeMax:      1024 * 1024,
 	})
 
-
-	// Write three bytes to the key "alpha/beta/gamma".
+	// Write some text to the key "alpha/beta/gamma".
 	key := "alpha/beta/gamma"
-	d.Write(key, []byte{'1', '2', '3'}) // will be stored in "<basedir>/alpha/beta/gamma.txt"
+	d.WriteString(key, "¡Hola!") // will be stored in "<basedir>/alpha/beta/gamma.txt"
+
+	fmt.Println(d.ReadString("alpha/beta/gamma"))
 
 }
 
