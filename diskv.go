@@ -111,7 +111,7 @@ func New(o Options) *Diskv {
 		if o.Transform == nil {
 			o.AdvancedTransform = defaultAdvancedTransform
 		} else {
-			o.AdvancedTransform = convertToSimpleTransform(o.Transform)
+			o.AdvancedTransform = convertToAdvancedTransform(o.Transform)
 		}
 		o.InverseTransform = defaultInverseTransform
 	} else {
@@ -140,9 +140,9 @@ func New(o Options) *Diskv {
 	return d
 }
 
-// convertToSimpleTransform takes a classic Transform function and
+// convertToAdvancedTransform takes a classic Transform function and
 // converts it to the new AdvancedTransform
-func convertToSimpleTransform(oldFunc func(s string) []string) AdvancedTransformFunction {
+func convertToAdvancedTransform(oldFunc func(s string) []string) AdvancedTransformFunction {
 	return func(s string) *PathKey {
 		return &PathKey{Path: oldFunc(s), FileName: s}
 	}
