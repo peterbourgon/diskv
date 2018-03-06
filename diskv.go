@@ -113,7 +113,9 @@ func New(o Options) *Diskv {
 		} else {
 			o.AdvancedTransform = convertToAdvancedTransform(o.Transform)
 		}
-		o.InverseTransform = defaultInverseTransform
+		if o.InverseTransform == nil {
+			o.InverseTransform = defaultInverseTransform
+		}
 	} else {
 		if o.InverseTransform == nil {
 			panic("You must provide an InverseTransform function in advanced mode")
