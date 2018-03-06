@@ -13,7 +13,6 @@ import (
 func TestIssue2A(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-issue-2a",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
 	defer d.EraseAll()
@@ -56,9 +55,10 @@ func TestIssue2B(t *testing.T) {
 	}
 
 	d := New(Options{
-		BasePath:     "test-issue-2b",
-		Transform:    blockTransform,
-		CacheSizeMax: 0,
+		BasePath:         "test-issue-2b",
+		Transform:        SimpleTransform(blockTransform),
+		InverseTransform: defaultInverseTransform,
+		CacheSizeMax:     0,
 	})
 	defer d.EraseAll()
 

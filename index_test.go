@@ -37,7 +37,6 @@ func (d *Diskv) isIndexed(key string) bool {
 func TestIndexOrder(t *testing.T) {
 	d := New(Options{
 		BasePath:     "index-test",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 		Index:        &BTreeIndex{},
 		IndexLess:    strLess,
@@ -68,7 +67,6 @@ func TestIndexOrder(t *testing.T) {
 func TestIndexLoad(t *testing.T) {
 	d1 := New(Options{
 		BasePath:     "index-test",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 	})
 	defer d1.EraseAll()
@@ -81,7 +79,6 @@ func TestIndexLoad(t *testing.T) {
 
 	d2 := New(Options{
 		BasePath:     "index-test",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 		Index:        &BTreeIndex{},
 		IndexLess:    strLess,
@@ -129,7 +126,6 @@ func TestIndexLoad(t *testing.T) {
 func TestIndexKeysEmptyFrom(t *testing.T) {
 	d := New(Options{
 		BasePath:     "index-test",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 		Index:        &BTreeIndex{},
 		IndexLess:    strLess,
@@ -150,7 +146,6 @@ func TestIndexKeysEmptyFrom(t *testing.T) {
 func TestBadKeys(t *testing.T) {
 	d := New(Options{
 		BasePath:     "index-test",
-		Transform:    func(string) []string { return []string{} },
 		CacheSizeMax: 1024,
 		Index:        &BTreeIndex{},
 		IndexLess:    strLess,
