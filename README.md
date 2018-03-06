@@ -103,6 +103,55 @@ always flatly available on the disk. diskv will never do anything that would
 prevent you from accessing, copying, backing up, or otherwise interacting with
 your data via common UNIX commandline tools.
 
+## Advanced path transformation
+
+If you need more control over the file name written to disk or if you want to support
+slashes in your key name or special characters in the keys, you can use the
+AdvancedTransform property. You must supply a function that returns
+a special PathKey structure, which is a breakdown of a path and a file name. Strings
+returned must be clean of any slashes or special characters:
+
+```go
+func AdvancedTransformExample (key string) *diskv.PathKey {
+	path := strings.Split(key,"/")
+	last := len(path)-1
+	return &diskv.PathKey{
+		Path: path[:last],
+		FileName: path[last] + ".txt"
+	}
+}
+
+// If you provide an AdvancedTransform, you must also provide its
+// inverse:
+
+func InverseTransformExample (pathKey *diskv.PathKey) (key string){
+	txt := pathKey.FileName[len(pathKey.FileName-4):]
+	if txt != ".txt" {
+		panic("Invalid file found in storage folder!")
+	}
+	key = strings.Join(pathKey.Path, "/") + pathKey.FileName[:len(pathKey.FileName-4)]
+	return
+}
+
+func main() {
+
+	d := diskv.New(diskv.Options{
+		BasePath:     "my-data-dir",
+		AdvancedTransform:    AdvancedTransformExample,
+		InverseTransform: InverseTransformExample,
+		CacheSizeMax: 1024 * 1024,
+	})
+
+
+	// Write three bytes to the key "alpha/beta/gamma".
+	key := "alpha/beta/gamma"
+	d.Write(key, []byte{'1', '2', '3'}) // will be stored in "<basedir>/alpha/beta/gamma.txt"
+
+}
+
+```
+
+
 ## Adding a cache
 
 An in-memory caching layer is provided by combining the BasicStore
@@ -139,3 +188,9 @@ data to be handled efficiently.
  * Needs plenty of robust testing: huge datasets, etc...
  * More thorough benchmarking
  * Your suggestions for use-cases I haven't thought of
+
+
+# Credits and contributions
+
+Original idea, design and implementation: [Peter Bourgon][https://github.com/peterbourgon]
+Other collaborations: [Javier Peletier][https://github.com/jpeletier] ([Epic Labs][https://www.epiclabs.io])
