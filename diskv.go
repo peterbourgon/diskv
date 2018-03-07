@@ -22,6 +22,9 @@ const (
 	defaultPathPerm os.FileMode = 0777
 )
 
+// PathKey represents a string key that has been transformed to
+// a directory and file name where the content will eventually
+// be stored
 type PathKey struct {
 	Path        []string
 	FileName    string
@@ -45,26 +48,22 @@ var (
 // the final location of the data file will be <basedir>/ab/cde/f/abcdef
 type TransformFunction func(s string) []string
 
-// AdvancedTransformFunction transforms a key into:
-// * A slice of strings, (Path) with each element in the slice
-// representing a directory in the file path where the
-// key's entry will eventually be stored.
+// AdvancedTransformFunction transforms a key into a PathKey.
 //
-// and:
+// A PathKey contains a slice of strings, where each element in the slice
+// represents a directory in the file path where the key's entry will eventually
+// be stored, as well as the filename.
 //
-// * the file name
+// For example, if AdvancedTransformFunc transforms "abcdef/file.txt" to the
+// PathKey {Path: ["ab", "cde", "f"], FileName: "file.txt"}, the final location
+// of the data file will be <basedir>/ab/cde/f/file.txt.
 //
-// For example, if TransformFunc transforms "abcdef/file.txt" to Path=["ab", "cde", "f"],
-// and FileName="file.txt"
-// the final location of the data file will be <basedir>/ab/cde/f/file.txt
-//
-// You must provide an InverseTransformFunction if you use this
-//
+// You must provide an InverseTransformFunction if you use an
+// AdvancedTransformFunction.
 type AdvancedTransformFunction func(s string) *PathKey
 
-// InverseTransformFunction takes a Path+Filename and
-// converts it back to a key
-
+// InverseTransformFunction takes a PathKey and converts it back to a Diskv key.
+// In effect, it's the opposite of an AdvancedTransformFunction.
 type InverseTransformFunction func(pathKey *PathKey) string
 
 // Options define a set of properties that dictate Diskv behavior.
@@ -165,7 +164,7 @@ func (d *Diskv) WriteString(key string, val string) error {
 func (d *Diskv) transform(key string) (pathKey *PathKey) {
 	pathKey = d.AdvancedTransform(key)
 	pathKey.originalKey = key
-	return
+	return pathKey
 }
 
 // WriteStream writes the data represented by the io.Reader to the disk, under
@@ -185,7 +184,6 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 		if strings.ContainsRune(pathPart, os.PathSeparator) {
 			return errBadKey
 		}
-
 	}
 
 	if strings.ContainsRune(pathKey.FileName, os.PathSeparator) {

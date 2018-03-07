@@ -340,7 +340,7 @@ func TestAtomicWrite(t *testing.T) {
 
 const letterBytes = "abcdef0123456789"
 
-func RandStringBytes(n int) string {
+func randStringBytes(n int) string {
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = letterBytes[rand.Intn(len(letterBytes))]
@@ -398,21 +398,21 @@ func TestHybridStore(t *testing.T) {
 	testData := map[string]string{}
 
 	for i := 0; i < 100; i++ {
-		testData[RandStringBytes(64)] = RandStringBytes(100)
+		testData[randStringBytes(64)] = randStringBytes(100)
 	}
 
 	for i := 0; i < 100; i++ {
-		testData[RandStringBytes(20)] = RandStringBytes(100)
+		testData[randStringBytes(20)] = randStringBytes(100)
 	}
 
 	for i := 0; i < 100; i++ {
 		numsep := rand.Intn(10) + 1
 		key := ""
 		for j := 0; j < numsep; j++ {
-			key += RandStringBytes(10) + "/"
+			key += randStringBytes(10) + "/"
 		}
-		key += RandStringBytes(40)
-		testData[key] = RandStringBytes(100)
+		key += randStringBytes(40)
+		testData[key] = randStringBytes(100)
 	}
 
 	for k, v := range testData {

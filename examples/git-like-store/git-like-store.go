@@ -17,11 +17,10 @@ import (
 	"github.com/peterbourgon/diskv"
 )
 
-var regex = regexp.MustCompile("[0-9a-fA-F]{40}")
+var hex40 = regexp.MustCompile("[0-9a-fA-F]{40}")
 
-func AdvancedTransformExample(s string) *diskv.PathKey {
-
-	if regex.MatchString(s) {
+func hexTransform(s string) *diskv.PathKey {
+	if hex40.MatchString(s) {
 		return &diskv.PathKey{Path: []string{"objects", s[0:2]},
 			FileName: s,
 		}
@@ -40,9 +39,8 @@ func AdvancedTransformExample(s string) *diskv.PathKey {
 	}
 }
 
-func InverseTransformExample(pathKey *diskv.PathKey) string {
-
-	if regex.MatchString(pathKey.FileName) {
+func hexInverseTransform(pathKey *diskv.PathKey) string {
+	if hex40.MatchString(pathKey.FileName) {
 		return pathKey.FileName
 	}
 
@@ -51,15 +49,13 @@ func InverseTransformExample(pathKey *diskv.PathKey) string {
 	}
 
 	return strings.Join(pathKey.Path, "/") + "/" + pathKey.FileName
-
 }
 
 func main() {
-
 	d := diskv.New(diskv.Options{
 		BasePath:          "my-data-dir",
-		AdvancedTransform: AdvancedTransformExample,
-		InverseTransform:  InverseTransformExample,
+		AdvancedTransform: hexTransform,
+		InverseTransform:  hexInverseTransform,
 		CacheSizeMax:      1024 * 1024,
 	})
 
@@ -76,5 +72,4 @@ func main() {
 		value := d.ReadString(key)
 		fmt.Printf("Key: %s, Value: %s\n", key, value)
 	}
-
 }

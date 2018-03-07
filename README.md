@@ -129,27 +129,21 @@ func InverseTransformExample(pathKey *diskv.PathKey) (key string) {
 	if txt != ".txt" {
 		panic("Invalid file found in storage folder!")
 	}
-	key = strings.Join(pathKey.Path, "/") + pathKey.FileName[:len(pathKey.FileName)-4]
-	return
+	return strings.Join(pathKey.Path, "/") + pathKey.FileName[:len(pathKey.FileName)-4]
 }
 
 func main() {
-
 	d := diskv.New(diskv.Options{
 		BasePath:          "my-data-dir",
 		AdvancedTransform: AdvancedTransformExample,
 		InverseTransform:  InverseTransformExample,
 		CacheSizeMax:      1024 * 1024,
 	})
-
 	// Write some text to the key "alpha/beta/gamma".
 	key := "alpha/beta/gamma"
 	d.WriteString(key, "¡Hola!") // will be stored in "<basedir>/alpha/beta/gamma.txt"
-
 	fmt.Println(d.ReadString("alpha/beta/gamma"))
-
 }
-
 ```
 
 
@@ -193,5 +187,5 @@ data to be handled efficiently.
 
 # Credits and contributions
 
-Original idea, design and implementation: [Peter Bourgon][https://github.com/peterbourgon]
-Other collaborations: [Javier Peletier][https://github.com/jpeletier] ([Epic Labs][https://www.epiclabs.io])
+Original idea, design and implementation: [Peter Bourgon](https://github.com/peterbourgon)
+Other collaborations: [Javier Peletier](https://github.com/jpeletier) ([Epic Labs](https://www.epiclabs.io))
