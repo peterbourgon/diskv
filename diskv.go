@@ -338,10 +338,14 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 func (d *Diskv) Read(key string) ([]byte, error) {
 	rc, err := d.ReadStream(key, false)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 	defer rc.Close()
-	return ioutil.ReadAll(rc)
+	value, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+	return value, err
 }
 
 // ReadString reads the key and returns a string value

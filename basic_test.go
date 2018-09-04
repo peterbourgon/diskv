@@ -49,6 +49,28 @@ func TestWriteReadErase(t *testing.T) {
 	}
 }
 
+func TestRead(t *testing.T) {
+	d := New(Options{
+		BasePath:     "test-data",
+		CacheSizeMax: 1024,
+	})
+	defer d.EraseAll()
+	k, v := "a", []byte(nil)
+	if err := d.Write(k, v); err != nil {
+		t.Fatalf("write: %s", err)
+	}
+	if readVal, err := d.Read(k); err != nil {
+		t.Fatalf("read: %s", err)
+	} else if len(readVal) > 0 || readVal == nil {
+		t.Fatalf("read: want an empty slice, got %v", readVal)
+	}
+	if readVal, err := d.Read("b"); err == nil {
+		t.Fatalf("read: want an error, got nil")
+	} else if readVal != nil {
+		t.Fatalf("read: want a nil slice, got %v", readVal)
+	}
+}
+
 func TestWRECache(t *testing.T) {
 	d := New(Options{
 		BasePath:     "test-data",
