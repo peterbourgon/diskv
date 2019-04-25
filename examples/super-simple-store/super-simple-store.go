@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/peterbourgon/diskv"
+	"github.com/peterbourgon/diskv/v3"
 )
 
 func main() {
