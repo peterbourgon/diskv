@@ -208,7 +208,7 @@ func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
 			return nil, fmt.Errorf("temp file: %s", err)
 		}
 
-		if err := f.Chmod(d.FilePerm); err != nil {
+		if err := os.Chmod(f.Name(), d.FilePerm); err != nil {
 			f.Close()           // error deliberately ignored
 			os.Remove(f.Name()) // error deliberately ignored
 			return nil, fmt.Errorf("chmod: %s", err)
