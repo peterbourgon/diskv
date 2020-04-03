@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -204,15 +203,13 @@ func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
 		if err := os.MkdirAll(d.TempDir, d.PathPerm); err != nil {
 			return nil, fmt.Errorf("temp mkdir: %s", err)
 		}
-		f, err := ioutil.TempFile(d.TempDir, "")
+		f, err := TempFileWithPerm(d.TempDir, "", d.FilePerm)
 		if err != nil {
+			if !os.IsExist(err) && f != nil {
+				f.Close()           // error deliberately ignored
+				os.Remove(f.Name()) // error deliberately ignored
+			}
 			return nil, fmt.Errorf("temp file: %s", err)
-		}
-
-		if err := f.Chmod(d.FilePerm); err != nil && runtime.GOOS != "windows" {
-			f.Close()           // error deliberately ignored
-			os.Remove(f.Name()) // error deliberately ignored
-			return nil, fmt.Errorf("chmod: %s", err)
 		}
 		return f, nil
 	}
