@@ -3,6 +3,7 @@ package diskv
 import (
 	"bytes"
 	"io/ioutil"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -117,4 +118,46 @@ func TestIssue17(t *testing.T) {
 	}
 	close(start)
 	wg.Wait()
+}
+
+func TestIssue40(t *testing.T) {
+	var (
+		basePath = "test-data"
+	)
+	// Simplest transform function: put all the data files into the base dir.
+	flatTransform := func(s string) []string { return []string{} }
+
+	// Initialize a new diskv store, rooted at "my-data-dir", with a 1MB cache.
+	d := New(Options{
+		BasePath:     basePath,
+		Transform:    flatTransform,
+		CacheSizeMax: 100,
+	})
+
+	defer d.EraseAll()
+
+	// Write a 50 byte value
+	k1 := "key1"
+	d1 := make([]byte, 50)
+	rand.Read(d1)
+	d.Write(k1, d1)
+	// Get two read streams on it
+	s1, err := d.ReadStream(k1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2, err := d.ReadStream(k1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ioutil.ReadAll(s1)
+	ioutil.ReadAll(s2)
+
+	// Now write a different value
+	k2 := "key2"
+	d2 := make([]byte, 60)
+	rand.Read(d2)
+	d.Write(k2, d2)
+	// ... and read it
+	d.Read(k2)
 }
