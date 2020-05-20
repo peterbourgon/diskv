@@ -120,6 +120,9 @@ func TestIssue17(t *testing.T) {
 	wg.Wait()
 }
 
+// Test for issue #40, where acquiring two stream readers on the same k/v pair
+// caused the value to be written into the cache twice, messing up the
+// size calculations.
 func TestIssue40(t *testing.T) {
 	var (
 		basePath = "test-data"
@@ -127,7 +130,8 @@ func TestIssue40(t *testing.T) {
 	// Simplest transform function: put all the data files into the base dir.
 	flatTransform := func(s string) []string { return []string{} }
 
-	// Initialize a new diskv store, rooted at "my-data-dir", with a 1MB cache.
+	// Initialize a new diskv store, rooted at "my-data-dir",
+	// with a 100 byte cache.
 	d := New(Options{
 		BasePath:     basePath,
 		Transform:    flatTransform,
@@ -136,12 +140,16 @@ func TestIssue40(t *testing.T) {
 
 	defer d.EraseAll()
 
-	// Write a 50 byte value
+	// Write a 50 byte value, filling the cache half-way
 	k1 := "key1"
 	d1 := make([]byte, 50)
 	rand.Read(d1)
 	d.Write(k1, d1)
-	// Get two read streams on it
+
+	// Get *two* read streams on it. Because the key is not yet in the cache,
+	// and will not be in the cache until a stream is fully read, both
+	// readers use the 'siphon' object, which always writes to the cache
+	// after reading.
 	s1, err := d.ReadStream(k1, false)
 	if err != nil {
 		t.Fatal(err)
@@ -150,14 +158,34 @@ func TestIssue40(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// When each stream is drained, the underlying siphon will write
+	// the value into the cache's map and increment the cache size.
+	// This means we will have 1 entry in the cache map
+	// ("key1" mapping to a 50 byte slice) but the cache size will be 100,
+	// because the buggy code does not check if an entry already exists
+	// in the map.
+	// s1 drains:
+	//   cache[k] = v
+	//   cacheSize += len(v)
+	// s2 drains:
+	//   cache[k] = v /* overwrites existing */
+	//   cacheSize += len(v) /* blindly adds to the cache size */
 	ioutil.ReadAll(s1)
 	ioutil.ReadAll(s2)
 
-	// Now write a different value
+	// Now write a different k/v pair, with a 60 byte array.
 	k2 := "key2"
 	d2 := make([]byte, 60)
 	rand.Read(d2)
 	d.Write(k2, d2)
-	// ... and read it
+	// The act of reading the k/v pair back out causes it to be cached.
+	// Because the cache is only 100 bytes, it needs to delete existing
+	// entries to make room.
+	// If the cache is buggy, it will delete the single 50-byte entry
+	// from the cache map & decrement cacheSize by 50... but because
+	// cacheSize was improperly incremented twice earlier, this will
+	// leave us with no entries in the cacheMap but with cacheSize==50.
+	// Since CacheSizeMax-cacheSize (100-50) is less than 60, there
+	// is no room in the cache for this entry and it panics.
 	d.Read(k2)
 }
