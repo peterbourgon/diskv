@@ -630,6 +630,9 @@ func (d *Diskv) completeFilename(pathKey *PathKey) string {
 // cacheWithLock attempts to cache the given key-value pair in the store's
 // cache. It can fail if the value is larger than the cache's maximum size.
 func (d *Diskv) cacheWithLock(key string, val []byte) error {
+	// If the key already exists, delete it.
+	d.bustCacheWithLock(key)
+
 	valueSize := uint64(len(val))
 	if err := d.ensureCacheSpaceWithLock(valueSize); err != nil {
 		return fmt.Errorf("%s; not caching", err)
