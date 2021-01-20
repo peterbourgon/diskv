@@ -69,13 +69,14 @@ type InverseTransformFunction func(pathKey *PathKey) string
 // Options define a set of properties that dictate Diskv behavior.
 // All values are optional.
 type Options struct {
-	BasePath          string
-	Transform         TransformFunction
-	AdvancedTransform AdvancedTransformFunction
-	InverseTransform  InverseTransformFunction
-	CacheSizeMax      uint64 // bytes
-	PathPerm          os.FileMode
-	FilePerm          os.FileMode
+	BasePath            string
+	Transform           TransformFunction
+	AdvancedTransform   AdvancedTransformFunction
+	InverseTransform    InverseTransformFunction
+	CacheSizeMax        uint64 // bytes
+	PathPerm            os.FileMode
+	FilePerm            os.FileMode
+	NoStrictMemoryLimit bool
 	// If TempDir is set, it will enable filesystem atomic writes by
 	// writing temporary files to that location before being moved
 	// to BasePath.
@@ -639,7 +640,7 @@ func (d *Diskv) cacheWithLock(key string, val []byte) error {
 	}
 
 	// be very strict about memory guarantees
-	if (d.cacheSize + valueSize) > d.CacheSizeMax {
+	if (d.cacheSize+valueSize) > d.CacheSizeMax && !d.NoStrictMemoryLimit {
 		panic(fmt.Sprintf("failed to make room for value (%d/%d)", valueSize, d.CacheSizeMax))
 	}
 
