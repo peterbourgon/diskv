@@ -216,7 +216,16 @@ func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
 		return f, nil
 	}
 
-	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists
+	// We call os.Remove before the call to OpenFile because otherwise we can
+	// mess with existing readers. If someone calls ReadStream, then proceeds
+	// to read from it slowly, then someone else calls WriteStream, the reader
+	// will start to get the *new* resource contents part-way through.
+	// By calling os.Remove, we unlink the existing file, but since the process
+	// still has a handle on the file, the existing readers can continue to
+	// read from it. Meanwhile we're free to update what's actually on-disk.
+	os.Remove(d.completeFilename(pathKey))
+
+	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists somehow
 	f, err := os.OpenFile(d.completeFilename(pathKey), mode, d.FilePerm)
 	if err != nil {
 		return nil, fmt.Errorf("open file: %s", err)
