@@ -189,3 +189,55 @@ func TestIssue40(t *testing.T) {
 	// is no room in the cache for this entry and it panics.
 	d.Read(k2)
 }
+
+// Test issue #63, where a reader obtained from ReadStream will start
+// to return invalid data if WriteStream is called before you finish
+// reading.
+func TestIssue63(t *testing.T) {
+	var (
+		basePath = "test-data"
+	)
+	// Simplest transform function: put all the data files into the base dir.
+	flatTransform := func(s string) []string { return []string{} }
+
+	// Initialize a new diskv store, rooted at "my-data-dir",
+	// with no cache.
+	d := New(Options{
+		BasePath:     basePath,
+		Transform:    flatTransform,
+		CacheSizeMax: 0,
+	})
+
+	defer d.EraseAll()
+
+	// Write a big entry
+	k1 := "key1"
+	d1 := make([]byte, 1024*1024)
+	rand.Read(d1)
+	d.Write(k1, d1)
+
+	// Open a reader. We set the direct flag to be sure we're going straight to disk.
+	s1, err := d.ReadStream(k1, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now generate a second big entry and put it in the *same* key
+	d2 := make([]byte, 1024*1024)
+	rand.Read(d2)
+	d.Write(k1, d2)
+
+	// Now read from that stream we opened
+	out, err := ioutil.ReadAll(s1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != len(d1) {
+		t.Fatalf("Invalid read: got %v bytes expected %v\n", len(out), len(d1))
+	}
+	for i := range out {
+		if out[i] != d1[i] {
+			t.Fatalf("Output differs from expected at byte %v", i)
+		}
+	}
+}
