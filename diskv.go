@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
@@ -39,6 +41,11 @@ var (
 	errBadKey                = errors.New("bad key")
 	errImportDirectory       = errors.New("can't import a directory")
 )
+
+func init() {
+	// Make sure we have good random numbers
+	rand.Seed(time.Now().UnixNano())
+}
 
 // TransformFunction transforms a key into a slice of strings, with each
 // element in the slice representing a directory in the file path where the
@@ -76,6 +83,7 @@ type Options struct {
 	CacheSizeMax      uint64 // bytes
 	PathPerm          os.FileMode
 	FilePerm          os.FileMode
+	// Note: TempDir is deprecated, all writes are now atomic.
 	// If TempDir is set, it will enable filesystem atomic writes by
 	// writing temporary files to that location before being moved
 	// to BasePath.
@@ -196,28 +204,18 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 	return d.writeStreamWithLock(pathKey, r, sync)
 }
 
-// createKeyFileWithLock either creates the key file directly, or
-// creates a temporary file in TempDir if it is set.
+// createKeyFileWithLock creates the key file with a random extension. This
+// will be automatically renamed by writeStreamWithLock once the write has been
+// completed. This solves issue #63, where calling ReadStream, then updating the
+// key before reading completes, leads to the reader getting invalid data.
 func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
-	if d.TempDir != "" {
-		if err := os.MkdirAll(d.TempDir, d.PathPerm); err != nil {
-			return nil, fmt.Errorf("temp mkdir: %s", err)
-		}
-		f, err := ioutil.TempFile(d.TempDir, "")
-		if err != nil {
-			return nil, fmt.Errorf("temp file: %s", err)
-		}
-
-		if err := os.Chmod(f.Name(), d.FilePerm); err != nil {
-			f.Close()           // error deliberately ignored
-			os.Remove(f.Name()) // error deliberately ignored
-			return nil, fmt.Errorf("chmod: %s", err)
-		}
-		return f, nil
-	}
-
-	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists
-	f, err := os.OpenFile(d.completeFilename(pathKey), mode, d.FilePerm)
+	// Figure out the path and append a random number
+	path := fmt.Sprintf("%s.%d", d.completeFilename(pathKey), rand.Int())
+	// It's incredibly unlikely that the destination file will exist, but
+	// we want to be absolutely sure: O_EXCL means we'll get an error if the
+	// file already exists.
+	mode := os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	f, err := os.OpenFile(path, mode, d.FilePerm)
 	if err != nil {
 		return nil, fmt.Errorf("open file: %s", err)
 	}
@@ -226,14 +224,27 @@ func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
 
 // writeStream does no input validation checking.
 func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) error {
+	// fullPath is the on-disk location of the key
+	fullPath := d.completeFilename(pathKey)
+
 	if err := d.ensurePathWithLock(pathKey); err != nil {
 		return fmt.Errorf("ensure path: %s", err)
 	}
 
+	// createKeyFileWithLock gives us a temporary file we can write to.
+	// We'll move it when we're all done.
 	f, err := d.createKeyFileWithLock(pathKey)
 	if err != nil {
 		return fmt.Errorf("create key file: %s", err)
 	}
+	// In case something bad happens, we want to delete the temporary file,
+	// lest we leave junk in the store.
+	defer func() {
+		if r := recover(); r != nil {
+			os.Remove(f.Name())
+			panic(r)
+		}
+	}()
 
 	wc := io.WriteCloser(&nopWriteCloser{f})
 	if d.Compression != nil {
@@ -269,7 +280,7 @@ func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) er
 		return fmt.Errorf("file close: %s", err)
 	}
 
-	fullPath := d.completeFilename(pathKey)
+	// Move the temporary file to the final location.
 	if f.Name() != fullPath {
 		if err := os.Rename(f.Name(), fullPath); err != nil {
 			os.Remove(f.Name()) // error deliberately ignored
