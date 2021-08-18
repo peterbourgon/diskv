@@ -147,6 +147,11 @@ func New(o Options) *Diskv {
 		d.Index.Initialize(d.IndexLess, d.Keys(nil))
 	}
 
+	// Just in case there were any failures during writes previously, we
+	// remove the atomic write directory (and any temp files within it).
+	// The directory will be created the first time we do a Write.
+	os.RemoveAll(d.atomicTempPath())
+
 	return d
 }
 
@@ -221,14 +226,6 @@ func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) er
 	if err != nil {
 		return fmt.Errorf("create key file: %s", err)
 	}
-	// In case something bad happens, we want to delete the temporary file,
-	// lest we leave junk in the store.
-	defer func() {
-		if r := recover(); r != nil {
-			os.Remove(f.Name())
-			panic(r)
-		}
-	}()
 
 	wc := io.WriteCloser(&nopWriteCloser{f})
 	if d.Compression != nil {
