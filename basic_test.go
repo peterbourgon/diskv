@@ -3,6 +3,7 @@ package diskv
 import (
 	"bytes"
 	"errors"
+	"io"
 	"math/rand"
 	"regexp"
 	"strings"
@@ -427,4 +428,61 @@ func TestHybridStore(t *testing.T) {
 		}
 	}
 
+}
+
+// Make sure that temporary files used for atomic writes never
+// show up in the key listing
+func TestIgnoreAtomicTempFiles(t *testing.T) {
+	var (
+		basePath = "test-data"
+	)
+	// Simplest transform function: put all the data files into the base dir.
+	flatTransform := func(s string) []string { return []string{} }
+
+	// Initialize a new diskv store, rooted at "my-data-dir",
+	// with no cache.
+	d := New(Options{
+		BasePath:     basePath,
+		Transform:    flatTransform,
+		CacheSizeMax: 0,
+	})
+
+	// Write something in so everything is set up
+	d.Write("foo", []byte("bar"))
+
+	// Start to write an entry using a stream, but do not
+	// put anything into it yet!
+	key := "key1"
+	data := make([]byte, 1024*1024)
+	rand.Read(data)
+
+	// Get a pipe
+	rdr, wtr := io.Pipe()
+
+	// Start the write
+	go d.WriteStream(key, rdr, true)
+
+	// Now list keys: there should be 1 key.
+	keys := d.Keys(nil)
+	var count int
+	for _ = range keys {
+		count++
+	}
+	if count != 1 {
+		t.Fatalf("Expected 1 key, got %d", count)
+	}
+
+	// Now complete the write
+	wtr.Write(data)
+	wtr.Close()
+
+	// And make sure we see exactly two keys
+	keys = d.Keys(nil)
+	for _ = range keys {
+		count++
+	}
+	if count != 2 {
+		t.Fatalf("Expected 2 keys, got %d", count)
+	}
+	d.EraseAll()
 }

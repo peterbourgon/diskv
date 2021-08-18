@@ -22,6 +22,8 @@ const (
 	defaultBasePath             = "diskv"
 	defaultFilePerm os.FileMode = 0666
 	defaultPathPerm os.FileMode = 0777
+
+	DefaultAtomicPrefix = ".diskv_atomic_temp"
 )
 
 // PathKey represents a string key that has been transformed to
@@ -79,12 +81,11 @@ type Options struct {
 	PathPerm          os.FileMode
 	FilePerm          os.FileMode
 	// Note: TempDir is deprecated, all writes are now atomic.
-	// If TempDir is set, it will enable filesystem atomic writes by
-	// writing temporary files to that location before being moved
-	// to BasePath.
-	// Note that TempDir MUST be on the same device/partition as
-	// BasePath.
 	TempDir string
+	// AtomicPrefix sets the name of a directory which will be created
+	// within BasePath to store temporary files for atomic writes.
+	// It defaults to DefaultAtomicPrefix; you probably don't need to change it.
+	AtomicPrefix string
 
 	Index     Index
 	IndexLess LessFunction
@@ -108,6 +109,9 @@ type Diskv struct {
 func New(o Options) *Diskv {
 	if o.BasePath == "" {
 		o.BasePath = defaultBasePath
+	}
+	if o.AtomicPrefix == "" {
+		o.AtomicPrefix = DefaultAtomicPrefix
 	}
 
 	if o.AdvancedTransform == nil {
@@ -201,24 +205,6 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 	return d.writeStreamWithLock(pathKey, r, sync)
 }
 
-// createKeyFileWithLock creates the key file with a random extension. This
-// will be automatically renamed by writeStreamWithLock once the write has been
-// completed. This solves issue #63, where calling ReadStream, then updating the
-// key before reading completes, leads to the reader getting invalid data.
-func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
-	// Figure out the path and append a random number
-	path := fmt.Sprintf("%s.%d", d.completeFilename(pathKey), d.rnd.Int())
-	// It's incredibly unlikely that the destination file will exist, but
-	// we want to be absolutely sure: O_EXCL means we'll get an error if the
-	// file already exists.
-	mode := os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	f, err := os.OpenFile(path, mode, d.FilePerm)
-	if err != nil {
-		return nil, fmt.Errorf("open file: %s", err)
-	}
-	return f, nil
-}
-
 // writeStream does no input validation checking.
 func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) error {
 	// fullPath is the on-disk location of the key
@@ -228,9 +214,10 @@ func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) er
 		return fmt.Errorf("ensure path: %s", err)
 	}
 
-	// createKeyFileWithLock gives us a temporary file we can write to.
+	// Get a temporary file we can write to.
 	// We'll move it when we're all done.
-	f, err := d.createKeyFileWithLock(pathKey)
+	d.ensureAtomicTempDir()
+	f, err := ioutil.TempFile(d.atomicTempPath(), pathKey.FileName)
 	if err != nil {
 		return fmt.Errorf("create key file: %s", err)
 	}
@@ -604,7 +591,7 @@ func (d *Diskv) walker(c chan<- string, prefix string, cancel <-chan struct{}) f
 
 		key := d.InverseTransform(pathKey)
 
-		if info.IsDir() || !strings.HasPrefix(key, prefix) {
+		if info.IsDir() || !strings.HasPrefix(key, prefix) || strings.HasPrefix(dir, d.AtomicPrefix) {
 			return nil // "pass"
 		}
 
@@ -633,6 +620,14 @@ func (d *Diskv) ensurePathWithLock(pathKey *PathKey) error {
 // completeFilename returns the absolute path to the file for the given key.
 func (d *Diskv) completeFilename(pathKey *PathKey) string {
 	return filepath.Join(d.pathFor(pathKey), pathKey.FileName)
+}
+
+func (d *Diskv) ensureAtomicTempDir() error {
+	return os.MkdirAll(d.atomicTempPath(), d.PathPerm)
+}
+
+func (d *Diskv) atomicTempPath() string {
+	return filepath.Join(d.BasePath, d.AtomicPrefix)
 }
 
 // cacheWithLock attempts to cache the given key-value pair in the store's
