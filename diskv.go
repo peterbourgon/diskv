@@ -262,11 +262,9 @@ func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) er
 	}
 
 	// Move the temporary file to the final location.
-	if f.Name() != fullPath {
-		if err := os.Rename(f.Name(), fullPath); err != nil {
-			os.Remove(f.Name()) // error deliberately ignored
-			return fmt.Errorf("rename: %s", err)
-		}
+	if err := os.Rename(f.Name(), fullPath); err != nil {
+		os.Remove(f.Name()) // error deliberately ignored
+		return fmt.Errorf("rename: %s", err)
 	}
 
 	if d.Index != nil {
