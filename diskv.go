@@ -42,11 +42,6 @@ var (
 	errImportDirectory       = errors.New("can't import a directory")
 )
 
-func init() {
-	// Make sure we have good random numbers
-	rand.Seed(time.Now().UnixNano())
-}
-
 // TransformFunction transforms a key into a slice of strings, with each
 // element in the slice representing a directory in the file path where the
 // key's entry will eventually be stored.
@@ -104,6 +99,7 @@ type Diskv struct {
 	mu        sync.RWMutex
 	cache     map[string][]byte
 	cacheSize uint64
+	rnd       *rand.Rand
 }
 
 // New returns an initialized Diskv structure, ready to use.
@@ -140,6 +136,7 @@ func New(o Options) *Diskv {
 		Options:   o,
 		cache:     map[string][]byte{},
 		cacheSize: 0,
+		rnd:       rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	if d.Index != nil && d.IndexLess != nil {
@@ -210,7 +207,7 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 // key before reading completes, leads to the reader getting invalid data.
 func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
 	// Figure out the path and append a random number
-	path := fmt.Sprintf("%s.%d", d.completeFilename(pathKey), rand.Int())
+	path := fmt.Sprintf("%s.%d", d.completeFilename(pathKey), d.rnd.Int())
 	// It's incredibly unlikely that the destination file will exist, but
 	// we want to be absolutely sure: O_EXCL means we'll get an error if the
 	// file already exists.
