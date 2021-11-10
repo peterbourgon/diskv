@@ -18,7 +18,7 @@ Install [Go 1][3], either [from source][4] or [with a prepackaged binary][5].
 Then,
 
 ```bash
-$ go get github.com/peterbourgon/diskv
+$ go get github.com/peterbourgon/diskv/v3
 ```
 
 [3]: http://golang.org
