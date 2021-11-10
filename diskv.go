@@ -466,15 +466,22 @@ func (s *siphon) Read(p []byte) (int, error) {
 	n, err := s.f.Read(p)
 
 	if err == nil {
-		return s.buf.Write(p[0:n]) // Write must succeed for Read to succeed
-	}
-
-	if err == io.EOF {
-		s.d.cacheWithoutLock(s.key, s.buf.Bytes()) // cache may fail
+		// Only write into the buffer if the buffer is not yet over the size of the cache.
+		// This logic guarantees that we'll write into the buffer until one of two things happens:
+		// 1. We write the entire contents of the source into the buffer.
+		// 2. We've read enough into the buffer to exceed the max cache size.
+		// If we read more than the max cache size into the buffer, our later attempt
+		// to update the cache will be rejected (because the value exceeds the max cache size);
+		// it does *not* cache a partial value.
+		if uint64(s.buf.Len()) < s.d.CacheSizeMax {
+			return s.buf.Write(p[0:n]) // Write must succeed for Read to succeed
+		}
+	} else if err == io.EOF {
+		// The cache will reject this if we've exceeded the maximum cache size
+		s.d.cacheWithoutLock(s.key, s.buf.Bytes())
 		if closeErr := s.f.Close(); closeErr != nil {
 			return n, closeErr // close must succeed for Read to succeed
 		}
-		return n, err
 	}
 
 	return n, err
