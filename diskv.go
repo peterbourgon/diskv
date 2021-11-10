@@ -9,17 +9,21 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
 	defaultBasePath             = "diskv"
 	defaultFilePerm os.FileMode = 0666
 	defaultPathPerm os.FileMode = 0777
+
+	DefaultAtomicPrefix = ".diskv_atomic_temp"
 )
 
 // PathKey represents a string key that has been transformed to
@@ -76,12 +80,12 @@ type Options struct {
 	CacheSizeMax      uint64 // bytes
 	PathPerm          os.FileMode
 	FilePerm          os.FileMode
-	// If TempDir is set, it will enable filesystem atomic writes by
-	// writing temporary files to that location before being moved
-	// to BasePath.
-	// Note that TempDir MUST be on the same device/partition as
-	// BasePath.
+	// Note: TempDir is deprecated, all writes are now atomic.
 	TempDir string
+	// AtomicPrefix sets the name of a directory which will be created
+	// within BasePath to store temporary files for atomic writes.
+	// It defaults to DefaultAtomicPrefix; you probably don't need to change it.
+	AtomicPrefix string
 
 	Index     Index
 	IndexLess LessFunction
@@ -96,6 +100,7 @@ type Diskv struct {
 	mu        sync.RWMutex
 	cache     map[string][]byte
 	cacheSize uint64
+	rnd       *rand.Rand
 }
 
 // New returns an initialized Diskv structure, ready to use.
@@ -104,6 +109,9 @@ type Diskv struct {
 func New(o Options) *Diskv {
 	if o.BasePath == "" {
 		o.BasePath = defaultBasePath
+	}
+	if o.AtomicPrefix == "" {
+		o.AtomicPrefix = DefaultAtomicPrefix
 	}
 
 	if o.AdvancedTransform == nil {
@@ -132,11 +140,17 @@ func New(o Options) *Diskv {
 		Options:   o,
 		cache:     map[string][]byte{},
 		cacheSize: 0,
+		rnd:       rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	if d.Index != nil && d.IndexLess != nil {
 		d.Index.Initialize(d.IndexLess, d.Keys(nil))
 	}
+
+	// Just in case there were any failures during writes previously, we
+	// remove the atomic write directory (and any temp files within it).
+	// The directory will be created the first time we do a Write.
+	os.RemoveAll(d.atomicTempPath())
 
 	return d
 }
@@ -196,41 +210,19 @@ func (d *Diskv) WriteStream(key string, r io.Reader, sync bool) error {
 	return d.writeStreamWithLock(pathKey, r, sync)
 }
 
-// createKeyFileWithLock either creates the key file directly, or
-// creates a temporary file in TempDir if it is set.
-func (d *Diskv) createKeyFileWithLock(pathKey *PathKey) (*os.File, error) {
-	if d.TempDir != "" {
-		if err := os.MkdirAll(d.TempDir, d.PathPerm); err != nil {
-			return nil, fmt.Errorf("temp mkdir: %s", err)
-		}
-		f, err := ioutil.TempFile(d.TempDir, "")
-		if err != nil {
-			return nil, fmt.Errorf("temp file: %s", err)
-		}
-
-		if err := os.Chmod(f.Name(), d.FilePerm); err != nil {
-			f.Close()           // error deliberately ignored
-			os.Remove(f.Name()) // error deliberately ignored
-			return nil, fmt.Errorf("chmod: %s", err)
-		}
-		return f, nil
-	}
-
-	mode := os.O_WRONLY | os.O_CREATE | os.O_TRUNC // overwrite if exists
-	f, err := os.OpenFile(d.completeFilename(pathKey), mode, d.FilePerm)
-	if err != nil {
-		return nil, fmt.Errorf("open file: %s", err)
-	}
-	return f, nil
-}
-
 // writeStream does no input validation checking.
 func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) error {
+	// fullPath is the on-disk location of the key
+	fullPath := d.completeFilename(pathKey)
+
 	if err := d.ensurePathWithLock(pathKey); err != nil {
 		return fmt.Errorf("ensure path: %s", err)
 	}
 
-	f, err := d.createKeyFileWithLock(pathKey)
+	// Get a temporary file we can write to.
+	// We'll move it when we're all done.
+	d.ensureAtomicTempDir()
+	f, err := ioutil.TempFile(d.atomicTempPath(), pathKey.FileName)
 	if err != nil {
 		return fmt.Errorf("create key file: %s", err)
 	}
@@ -269,12 +261,10 @@ func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) er
 		return fmt.Errorf("file close: %s", err)
 	}
 
-	fullPath := d.completeFilename(pathKey)
-	if f.Name() != fullPath {
-		if err := os.Rename(f.Name(), fullPath); err != nil {
-			os.Remove(f.Name()) // error deliberately ignored
-			return fmt.Errorf("rename: %s", err)
-		}
+	// Move the temporary file to the final location.
+	if err := os.Rename(f.Name(), fullPath); err != nil {
+		os.Remove(f.Name()) // error deliberately ignored
+		return fmt.Errorf("rename: %s", err)
 	}
 
 	if d.Index != nil {
@@ -596,7 +586,7 @@ func (d *Diskv) walker(c chan<- string, prefix string, cancel <-chan struct{}) f
 
 		key := d.InverseTransform(pathKey)
 
-		if info.IsDir() || !strings.HasPrefix(key, prefix) {
+		if info.IsDir() || !strings.HasPrefix(key, prefix) || strings.HasPrefix(dir, d.AtomicPrefix) {
 			return nil // "pass"
 		}
 
@@ -625,6 +615,14 @@ func (d *Diskv) ensurePathWithLock(pathKey *PathKey) error {
 // completeFilename returns the absolute path to the file for the given key.
 func (d *Diskv) completeFilename(pathKey *PathKey) string {
 	return filepath.Join(d.pathFor(pathKey), pathKey.FileName)
+}
+
+func (d *Diskv) ensureAtomicTempDir() error {
+	return os.MkdirAll(d.atomicTempPath(), d.PathPerm)
+}
+
+func (d *Diskv) atomicTempPath() string {
+	return filepath.Join(d.BasePath, d.AtomicPrefix)
 }
 
 // cacheWithLock attempts to cache the given key-value pair in the store's
