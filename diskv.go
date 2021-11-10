@@ -69,13 +69,14 @@ type InverseTransformFunction func(pathKey *PathKey) string
 // Options define a set of properties that dictate Diskv behavior.
 // All values are optional.
 type Options struct {
-	BasePath          string
-	Transform         TransformFunction
-	AdvancedTransform AdvancedTransformFunction
-	InverseTransform  InverseTransformFunction
-	CacheSizeMax      uint64 // bytes
-	PathPerm          os.FileMode
-	FilePerm          os.FileMode
+	BasePath             string
+	Transform            TransformFunction
+	AdvancedTransform    AdvancedTransformFunction
+	InverseTransform     InverseTransformFunction
+	CacheSizeMax         uint64 // bytes
+	PathPerm             os.FileMode
+	FilePerm             os.FileMode
+	NoPanicOnMemoryLimit bool
 	// If TempDir is set, it will enable filesystem atomic writes by
 	// writing temporary files to that location before being moved
 	// to BasePath.
@@ -640,7 +641,12 @@ func (d *Diskv) cacheWithLock(key string, val []byte) error {
 
 	// be very strict about memory guarantees
 	if (d.cacheSize + valueSize) > d.CacheSizeMax {
-		panic(fmt.Sprintf("failed to make room for value (%d/%d)", valueSize, d.CacheSizeMax))
+		err := fmt.Sprintf("failed to make room for value (%d/%d/%d)", valueSize, d.cacheSize, d.CacheSizeMax)
+		if d.NoPanicOnMemoryLimit {
+			return fmt.Errorf("%s; not caching", err)
+		}
+
+		panic(err)
 	}
 
 	d.cache[key] = val
@@ -713,7 +719,12 @@ func (d *Diskv) ensureCacheSpaceWithLock(valueSize uint64) error {
 	}
 
 	if !safe() {
-		panic(fmt.Sprintf("%d bytes still won't fit in the cache! (max %d bytes)", valueSize, d.CacheSizeMax))
+		err := fmt.Errorf("%d bytes still won't fit in the cache! (cache size %d bytes, max %d bytes)", valueSize, d.cacheSize, d.CacheSizeMax)
+		if d.NoPanicOnMemoryLimit {
+			return err
+		}
+
+		panic(err)
 	}
 
 	return nil
