@@ -3,15 +3,9 @@ package diskv
 import (
 	"compress/flate"
 	"fmt"
-	"math/rand"
 	"os"
 	"testing"
-	"time"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 func testCompressionWith(t *testing.T, c Compression, name string) {
 	d := New(Options{
@@ -24,7 +18,12 @@ func testCompressionWith(t *testing.T, c Compression, name string) {
 	sz := 4096
 	val := make([]byte, sz)
 	for i := 0; i < sz; i++ {
-		val[i] = byte('a' + rand.Intn(26)) // {a-z}; should compress some
+		// Deterministic, LZ77-compressible payload (runs of repeated bytes).
+		// Go 1.27's fast flate encoders (levels 1-8) emit stored, uncompressed
+		// blocks when a block has no back-references, so the previous random
+		// {a-z} data would (non-deterministically) fail to shrink at those
+		// levels. Repeated runs compress reliably at every level.
+		val[i] = byte('a' + (i/16)%26)
 	}
 
 	key := "a"
