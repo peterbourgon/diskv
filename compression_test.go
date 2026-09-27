@@ -3,15 +3,9 @@ package diskv
 import (
 	"compress/flate"
 	"fmt"
-	"math/rand"
 	"os"
 	"testing"
-	"time"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 func testCompressionWith(t *testing.T, c Compression, name string) {
 	d := New(Options{
@@ -22,9 +16,16 @@ func testCompressionWith(t *testing.T, c Compression, name string) {
 	defer d.EraseAll()
 
 	sz := 4096
+	// Highly compressible input: Go 1.27+ flate can emit slightly larger
+	// output for higher-entropy payloads (see go.dev/doc/go1.27#compressflate),
+	// so do not rely on random {a-z} shrinking under BestSpeed/Default.
 	val := make([]byte, sz)
 	for i := 0; i < sz; i++ {
-		val[i] = byte('a' + rand.Intn(26)) // {a-z}; should compress some
+		val[i] = 'a'
+	}
+	// Sprinkle a little variety so we are not testing a degenerate all-identical buffer only.
+	for i := 0; i < sz; i += 64 {
+		val[i] = byte('a' + (i/64)%26)
 	}
 
 	key := "a"
