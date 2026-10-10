@@ -64,6 +64,8 @@ type AdvancedTransformFunction func(s string) *PathKey
 
 // InverseTransformFunction takes a PathKey and converts it back to a Diskv key.
 // In effect, it's the opposite of an AdvancedTransformFunction.
+// Key enumeration calls it only for files, not directories. Return an empty
+// string to ignore files that do not represent a valid key.
 type InverseTransformFunction func(pathKey *PathKey) string
 
 // Options define a set of properties that dictate Diskv behavior.
@@ -583,6 +585,9 @@ func (d *Diskv) walker(c chan<- string, prefix string, cancel <-chan struct{}) f
 		if err != nil {
 			return err
 		}
+		if info.IsDir() {
+			return nil // "pass", but continue walking its children
+		}
 
 		relPath, _ := filepath.Rel(d.BasePath, path)
 		dir, file := filepath.Split(relPath)
@@ -596,7 +601,7 @@ func (d *Diskv) walker(c chan<- string, prefix string, cancel <-chan struct{}) f
 
 		key := d.InverseTransform(pathKey)
 
-		if info.IsDir() || !strings.HasPrefix(key, prefix) {
+		if key == "" || !strings.HasPrefix(key, prefix) {
 			return nil // "pass"
 		}
 

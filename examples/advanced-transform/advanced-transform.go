@@ -20,11 +20,11 @@ func AdvancedTransformExample(key string) *diskv.PathKey {
 // inverse:
 
 func InverseTransformExample(pathKey *diskv.PathKey) (key string) {
-	txt := pathKey.FileName[len(pathKey.FileName)-4:]
-	if txt != ".txt" {
-		panic("Invalid file found in storage folder!")
+	if !strings.HasSuffix(pathKey.FileName, ".txt") {
+		return "" // Ignore files not produced by AdvancedTransformExample.
 	}
-	return strings.Join(pathKey.Path, "/") + pathKey.FileName[:len(pathKey.FileName)-4]
+	name := strings.TrimSuffix(pathKey.FileName, ".txt")
+	return strings.Join(append(pathKey.Path, name), "/")
 }
 
 func main() {

@@ -125,11 +125,11 @@ func AdvancedTransformExample(key string) *diskv.PathKey {
 // inverse:
 
 func InverseTransformExample(pathKey *diskv.PathKey) (key string) {
-	txt := pathKey.FileName[len(pathKey.FileName)-4:]
-	if txt != ".txt" {
-		panic("Invalid file found in storage folder!")
+	if !strings.HasSuffix(pathKey.FileName, ".txt") {
+		return "" // Ignore files not produced by AdvancedTransformExample.
 	}
-	return strings.Join(pathKey.Path, "/") + pathKey.FileName[:len(pathKey.FileName)-4]
+	name := strings.TrimSuffix(pathKey.FileName, ".txt")
+	return strings.Join(append(pathKey.Path, name), "/")
 }
 
 func main() {
@@ -146,6 +146,10 @@ func main() {
 }
 ```
 
+
+During key enumeration, `InverseTransform` receives only files. Return an empty
+string to ignore a file that does not represent a valid key; directories are
+skipped while their children are still visited.
 
 ## Adding a cache
 
