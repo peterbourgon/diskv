@@ -359,6 +359,9 @@ func (d *Diskv) ReadString(key string) string {
 // If direct is true, ReadStream will lazily delete any cached value for the
 // key, and return a direct handle to the file on disk.
 //
+// Close the returned stream when finished, including when stopping before EOF.
+// A disk-backed stream also closes itself and its underlying file at EOF.
+//
 // If compression is enabled, ReadStream taps into the io.Reader stream prior
 // to decompression, and caches the compressed data.
 func (d *Diskv) ReadStream(key string, direct bool) (io.ReadCloser, error) {
@@ -406,38 +409,63 @@ func (d *Diskv) readWithRLock(pathKey *PathKey) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	var r io.Reader
+	// Keep ownership of the file here; compression readers only receive a Reader.
+	var r io.Reader = struct{ io.Reader }{f}
 	if d.CacheSizeMax > 0 {
 		r = newSiphon(f, d, pathKey.originalKey)
-	} else {
-		r = &closingReader{f}
 	}
 
 	var rc = io.ReadCloser(ioutil.NopCloser(r))
 	if d.Compression != nil {
 		rc, err = d.Compression.Reader(r)
 		if err != nil {
+			f.Close() // preserve the decoder initialization error
 			return nil, err
 		}
 	}
 
-	return rc, nil
+	return &closingReader{rc: rc, source: f, preserveEOF: d.Compression != nil}, nil
 }
 
-// closingReader provides a Reader that automatically closes the
-// embedded ReadCloser when it reaches EOF
+// closingReader closes both the reader and its source on Close or EOF.
+// A compression reader may reach EOF without exhausting its source, and its
+// Close method need not close that source.
 type closingReader struct {
-	rc io.ReadCloser
+	rc          io.ReadCloser
+	source      io.Closer
+	closed      bool
+	preserveEOF bool
+	eof         bool
 }
 
-func (cr closingReader) Read(p []byte) (int, error) {
+func (cr *closingReader) Read(p []byte) (int, error) {
+	if cr.eof {
+		return 0, io.EOF
+	}
 	n, err := cr.rc.Read(p)
 	if err == io.EOF {
-		if closeErr := cr.rc.Close(); closeErr != nil {
+		// Closing a decoder can reset its EOF state. Plain file readers keep
+		// their existing closed-file error on subsequent reads.
+		cr.eof = cr.preserveEOF
+		if closeErr := cr.Close(); closeErr != nil {
 			return n, closeErr // close must succeed for Read to succeed
 		}
 	}
 	return n, err
+}
+
+func (cr *closingReader) Close() error {
+	if cr.closed {
+		return nil
+	}
+	cr.closed = true
+	err := cr.rc.Close()
+	if cr.source != nil {
+		if closeErr := cr.source.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	return err
 }
 
 // siphon is like a TeeReader: it copies all data read through it to an
@@ -471,9 +499,6 @@ func (s *siphon) Read(p []byte) (int, error) {
 
 	if err == io.EOF {
 		s.d.cacheWithoutLock(s.key, s.buf.Bytes()) // cache may fail
-		if closeErr := s.f.Close(); closeErr != nil {
-			return n, closeErr // close must succeed for Read to succeed
-		}
 		return n, err
 	}
 
