@@ -360,7 +360,7 @@ func (d *Diskv) ReadString(key string) string {
 // key, and return a direct handle to the file on disk.
 //
 // Close the returned stream when finished, including when stopping before EOF.
-// Reaching EOF also closes the stream and its underlying file.
+// A disk-backed stream also closes itself and its underlying file at EOF.
 //
 // If compression is enabled, ReadStream taps into the io.Reader stream prior
 // to decompression, and caches the compressed data.
@@ -424,21 +424,29 @@ func (d *Diskv) readWithRLock(pathKey *PathKey) (io.ReadCloser, error) {
 		}
 	}
 
-	return &closingReader{rc: rc, source: f}, nil
+	return &closingReader{rc: rc, source: f, preserveEOF: d.Compression != nil}, nil
 }
 
 // closingReader closes both the reader and its source on Close or EOF.
 // A compression reader may reach EOF without exhausting its source, and its
 // Close method need not close that source.
 type closingReader struct {
-	rc     io.ReadCloser
-	source io.Closer
-	closed bool
+	rc          io.ReadCloser
+	source      io.Closer
+	closed      bool
+	preserveEOF bool
+	eof         bool
 }
 
 func (cr *closingReader) Read(p []byte) (int, error) {
+	if cr.eof {
+		return 0, io.EOF
+	}
 	n, err := cr.rc.Read(p)
 	if err == io.EOF {
+		// Closing a decoder can reset its EOF state. Plain file readers keep
+		// their existing closed-file error on subsequent reads.
+		cr.eof = cr.preserveEOF
 		if closeErr := cr.Close(); closeErr != nil {
 			return n, closeErr // close must succeed for Read to succeed
 		}
