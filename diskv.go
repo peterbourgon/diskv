@@ -321,6 +321,18 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 		}
 	}
 
+	if move && d.Compression != nil {
+		// Keep the rename no-op when the source already names the destination.
+		srcInfo, err := os.Stat(srcFilename)
+		if err != nil {
+			return err
+		}
+		if dstInfo, err := os.Stat(d.completeFilename(dstPathKey)); err == nil && os.SameFile(srcInfo, dstInfo) {
+			d.bustCacheWithLock(dstPathKey.originalKey)
+			return nil
+		}
+	}
+
 	f, err := os.Open(srcFilename)
 	if err != nil {
 		return err
