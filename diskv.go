@@ -288,7 +288,8 @@ func (d *Diskv) writeStreamWithLock(pathKey *PathKey, r io.Reader, sync bool) er
 
 // Import imports the source file into diskv under the destination key. If the
 // destination key already exists, it's overwritten. If move is true, the
-// source file is removed after a successful import.
+// source file is removed after a successful import. As with Write, the source
+// data is compressed if Compression is configured.
 func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 	if dstKey == "" {
 		return errEmptyKey
@@ -309,7 +310,8 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 		return fmt.Errorf("ensure path: %s", err)
 	}
 
-	if move {
+	// A rename would bypass the compression applied by writeStreamWithLock.
+	if move && d.Compression == nil {
 		if err := syscall.Rename(srcFilename, d.completeFilename(dstPathKey)); err == nil {
 			d.bustCacheWithLock(dstPathKey.originalKey)
 			return nil
@@ -326,6 +328,10 @@ func (d *Diskv) Import(srcFilename, dstKey string, move bool) (err error) {
 	defer f.Close()
 	err = d.writeStreamWithLock(dstPathKey, f, false)
 	if err == nil && move {
+		// Windows does not allow removing an open source file.
+		if err := f.Close(); err != nil {
+			return err
+		}
 		err = os.Remove(srcFilename)
 	}
 	return err
