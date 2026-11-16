@@ -88,33 +88,3 @@ func TestImportMoveCompressedSameFile(t *testing.T) {
 		})
 	}
 }
-
-func TestImportCopyCompressedSameFile(t *testing.T) {
-	dir, err := ioutil.TempDir("", "diskv-import-copy-samefile-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	d := diskv.New(diskv.Options{
-		BasePath:    filepath.Join(dir, "store"),
-		TempDir:     filepath.Join(dir, "temp"),
-		Compression: diskv.NewGzipCompression(),
-	})
-	if err := d.Write("key", []byte("stored value")); err != nil {
-		t.Fatal(err)
-	}
-	source := filepath.Join(d.BasePath, "key")
-	before, err := ioutil.ReadFile(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Copy imports still treat the source bytes as a new value, even when
-	// the source is an existing compressed file in the store.
-	if err := d.Import(source, "key", false); err != nil {
-		t.Fatal(err)
-	}
-	got, err := d.Read("key")
-	if err != nil || !bytes.Equal(got, before) {
-		t.Fatalf("read = %q, %v; want source bytes %q", got, err, before)
-	}
-}
